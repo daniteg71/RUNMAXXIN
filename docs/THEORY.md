@@ -96,10 +96,20 @@ entrare nel lavoro. ⚙️ durata e rampa = design → ablation (buona pratica d
 - IntenseRun/ripetute: alterna veloce/lento rispetto alla canzone precedente (`last_bpm`) →
   variabilità di ritmo tipica del lavoro a intervalli. ⚙️ design.
 
-## Stadio 3 — Recommender (fuori scope per ora)
-Softmax/Boltzmann per exploration/exploitation della prossima canzone.
-- ✅ **Sutton & Barto**, *Reinforcement Learning: An Introduction* — softmax (τ alto esplora, τ→0 sfrutta).
-- ✅ **Rada et al. 1989** — distanza semantica su rete di concetti (ontologia dei generi).
+## Stadio 3 — Recommender (`recommender.py`)
+Riceve il `Target`, calcola la **distanza euclidea pesata** target↔canzone e assegna una
+probabilità con un **softmax**:
+```
+d(s) = √[ w_bpm·((bpm_s−bpm*)/tol)² + w_energy·(energy_s−energy*)² + w_valence·(valence_s−valence*)² ]
+P(s) = softmax(−d(s)/τ) = exp(−d(s)/τ) / Σ_j exp(−d(j)/τ)
+```
+- i pesi `w` sono normalizzati a somma 1; il **BPM è normalizzato da `bpm_tolerance`** (tol
+  piccola → scarto di BPM più severo; grande → più permissivo);
+- restituisce le **Top-K** canzoni per probabilità, escludendo le tracce recenti (memoria) e,
+  in regime qualitativo, filtrando sui **generi del mood** forniti dall'ontologia.
+- ✅ **Sutton & Barto** — softmax/Boltzmann per exploration/exploitation (τ alto esplora, τ→0 sfrutta).
+- ⚙️ distanza euclidea pesata e normalizzazione del BPM via tolleranza = scelte di design → ablation.
+- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti (filtro del regime qualitativo).
 
 ---
 

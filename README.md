@@ -75,10 +75,12 @@ Concatena gli stadi: calcola l'intento una volta, poi legge le finestre da 30s d
 Il recommender è qui uno **stub** (canzone col BPM più vicino) — un gancio per il collega.
 `main.py` è una versione minimale (prompt → intento → target, senza loop).
 
-### Stadio 3 — Recommender (del collega, NON incluso)
-Riceve il `Target`, calcola una distanza pesata dai vettori-canzone e assegna probabilità con
-un softmax (`P ∝ exp(−distanza/tau)`). Non è parte di questo repo; il contratto d'interfaccia è
-documentato in `docs/TARGET_CONTRACT.md`.
+### Stadio 3 — Recommender (`recommender.py`)
+Riceve il `Target`, calcola la distanza euclidea pesata dai vettori-canzone (BPM normalizzato
+da `bpm_tolerance`) e assegna probabilità con un softmax (`P ∝ exp(−distanza/τ)`); restituisce
+le Top-K canzoni, escludendo le tracce recenti e filtrando sui generi del mood nel regime
+qualitativo. Consuma esattamente il `Target` del controller (contratto in
+`docs/TARGET_CONTRACT.md`). Implementato in numpy/pandas.
 
 ### Dati simulati (`simulate_sessions.py`)
 Genera `data/simulated/bpm_sessions.csv` con due sessioni da 30 minuti (input per `build_dataset`):
@@ -119,8 +121,8 @@ Rada 1989 per l'ontologia). Le scelte di design (soglie, pesi, τ) sono dichiara
 | NLP (`intent`, training, valutazione) | fatto |
 | Ontologia mood→generi | fatto |
 | Controller (vettore target) | fatto |
-| Loop di sessione | fatto (con recommender stub) |
-| Recommendation system | **da fare — sviluppato dal collega** |
+| Loop di sessione (`session.py`, `main.py`) | fatto (usa il recommender) |
+| Recommendation system (`recommender.py`) | fatto (distanza pesata + softmax) |
 
 ## Note oneste (limiti)
 - I modelli SetFit sono few-shot: coprono le frasi tipiche ma possono sbagliare su formulazioni

@@ -4,6 +4,11 @@ Per chi costruisce il **recommendation system**. Il controller (`controller.py`)
 `decide(intent, analysis=None, last_bpm=None, elapsed_min=None) -> Target`. Tu ricevi il
 `Target`, calcoli una distanza dai vettori-canzone e assegni probabilità con un softmax.
 
+> **Stato: implementato.** `recommender.py` consuma esattamente questo contratto
+> (`recommender.recommend(target, top_k, exclude_song_ids)` → Top-K con `probability`).
+> Usa `bpm, energy, valence, weights, bpm_tolerance, genres, tau`. Non usa `effort_band`
+> (lo sforzo è già incorporato nel vettore via `bpm`/`energy`).
+
 ## 1. Cosa ti esce: `Target`
 
 | Campo | Tipo | Significato | Range |
