@@ -15,7 +15,9 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import random
 import time
+import zlib
 
 from rich.columns import Columns
 from rich.console import Console, Group
@@ -24,8 +26,8 @@ from rich.table import Table
 from rich.text import Text
 
 from controller import decide
-from symbolic import is_effort_compatible
-from session import (TOP_K, aggregate, group_by_song, load, load_effort_by_song)
+from session import (TOP_K, aggregate, group_by_song, load, load_effort_by_song,
+                     load_song_variants, pick_song)
 import recommender
 
 console = Console()
@@ -43,15 +45,6 @@ def get_intent(prompt: str):
         tb = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None
         return ({"goal": goal, "mood": "Neutral", "numbers": numbers,
                  "target_bpm": tb, "params": GOAL_PARAMS[goal]}, False)
-
-
-def choose_song(target, top_df, effort_by_song):
-    """Effort gate: prima canzone del Top-K compatibile; ritorna (song, gate_intervenuto)."""
-    for i, (_, song) in enumerate(top_df.iterrows()):
-        efforts = effort_by_song.get(str(song["song_id"]), "").split(";")
-        if is_effort_compatible(efforts, target.effort_band):
-            return song, i > 0            # i>0 = il Top-1 era incompatibile, il gate ha corretto
-    return top_df.iloc[0], False
 
 
 def _bar(value: float, width: int = 12) -> Text:
@@ -93,7 +86,7 @@ def render(prompt, intent, nlp_real, elapsed, state, target, song, gate_hit, his
     now.add_row(Text(f"{song['artist']}", style="dim"))
     now.add_row(Text.assemble((f"{song['genre']}", "cyan"), ("  ·  ", "dim"),
                               (f"{song['bpm']} bpm", "white"),
-                              ("   [gate ✓ ha corretto lo sforzo]" if gate_hit else "", "yellow")))
+                              ("   [explore]" if gate_hit else "", "yellow")))
     now.add_row(Text(f"▶ {song.get('spotify_url', '')}", style="dim green"))
     playing = Panel(now, title="♪ ORA IN RIPRODUZIONE", border_style="bright_magenta")
 
@@ -119,9 +112,11 @@ def main() -> None:
 
     windows = [w for w in load(a.windows) if not a.session or w["session_id"] == a.session]
     effort_by_song = load_effort_by_song()
+    variants = load_song_variants()
     intent, nlp_real = get_intent(prompt)
 
     from rich.live import Live
+    rng = random.Random(zlib.crc32((a.session or prompt).encode()))
     played, last_bpm, history = [], None, []
     console.print("[dim]Avvio sessione…[/dim]")
     with Live(console=console, refresh_per_second=8, screen=False) as live:
@@ -129,9 +124,9 @@ def main() -> None:
             state = aggregate(block)
             elapsed = int(block[0]["window_start_second"]) / 60.0
             target = decide(intent, state, last_bpm, elapsed_min=elapsed)
-            top = recommender.recommend(target, top_k=TOP_K, exclude_song_ids=played)
-            song, gate_hit = choose_song(target, top, effort_by_song)
-            played.append(str(song["song_id"]))
+            top = recommender.recommend(target, top_k=TOP_K * 8, exclude_song_ids=played)
+            song, gate_hit, _rows = pick_song(rng, target, top, effort_by_song)
+            played.extend(variants.get((song["title"], song["artist"]), [str(song["song_id"])]))
             last_bpm = float(song["bpm"])
             regime = "RECUPERO" if target.recovery else target.regime
             history.append((f"{elapsed:.0f}m", f"{state['mean_hrr']:.2f}", regime,

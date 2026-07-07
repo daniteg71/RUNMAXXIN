@@ -12,11 +12,10 @@ Usage:  python tester.py
 from __future__ import annotations
 
 import argparse
-import csv
 import random
 import time
 import zlib
-from collections import Counter, defaultdict
+from collections import Counter
 from statistics import mean
 
 from rich.columns import Columns
@@ -27,8 +26,8 @@ from rich.table import Table
 from rich.text import Text
 
 from controller import decide
-from symbolic import is_effort_compatible
-from session import TOP_K, aggregate, group_by_song, load, load_effort_by_song
+from session import (TOP_K, aggregate, group_by_song, load, load_effort_by_song,
+                     load_song_variants, pick_song)
 from simulate_sessions import ARCHETYPES
 import recommender
 
@@ -78,40 +77,6 @@ def get_intent(prompt: str):
         tb = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None
         return ({"goal": goal, "mood": "Neutral", "numbers": numbers,
                  "target_bpm": tb, "params": GOAL_PARAMS[goal]}, False)
-
-
-def load_song_variants(path: str = "songs.csv"):
-    """(title, artist) -> tutti i song_id che sono la STESSA canzone (il catalogo Spotify ha
-    fino a 45 copie della stessa traccia con id diversi). Serve a non riproporre un doppione."""
-    variants: dict = defaultdict(list)
-    with open(path, newline="", encoding="utf-8") as f:
-        for r in csv.DictReader(f):
-            variants[(r["title"], r["artist"])].append(str(r["song_id"]))
-    return variants
-
-
-SAMPLE_POOL = 10   # fra quante candidate vicine campionare (varietà, restando vicino al target)
-
-
-def pick_song(rng, target, top_df, effort_by_song):
-    """Deduplica per (titolo, artista) — il catalogo ha doppioni con id diversi — filtra col
-    gate di sforzo, poi CAMPIONA fra le vicine pesando per `probability` (softmax di Sutton &
-    Barto: completa l'esplorazione che il recommender calcola ma non usa). Sessioni diverse ->
-    canzoni diverse; stesso seed -> riproducibile. Ritorna (canzone, esplorato, top-list dedup)."""
-    seen, rows = set(), []
-    for _, r in top_df.iterrows():
-        k = (r["title"], r["artist"])
-        if k in seen:
-            continue
-        seen.add(k)
-        rows.append(r)
-    compat = [r for r in rows if is_effort_compatible(
-        effort_by_song.get(str(r["song_id"]), "").split(";"), target.effort_band)]
-    pool = (compat or rows)[:SAMPLE_POOL]
-    weights = [max(1e-12, float(r["probability"])) for r in pool]
-    chosen = rng.choices(pool, weights=weights, k=1)[0]
-    explored = bool(rows) and str(chosen["song_id"]) != str(rows[0]["song_id"])
-    return chosen, explored, rows
 
 
 _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
