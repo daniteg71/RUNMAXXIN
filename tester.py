@@ -74,10 +74,12 @@ def get_intent(prompt: str):
         from intent import route
         return route(prompt), True
     except Exception:
-        from intent import GOAL_PARAMS, goal_from_keywords, parse_numbers
+        from intent import GOAL_PARAMS, bpm_from_speed, goal_from_keywords, parse_numbers
         goal = goal_from_keywords(prompt) or "ModerateRun"
-        return ({"goal": goal, "mood": "Neutral", "numbers": parse_numbers(prompt),
-                 "target_bpm": None, "params": GOAL_PARAMS[goal]}, False)
+        numbers = parse_numbers(prompt)
+        tb = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None
+        return ({"goal": goal, "mood": "Neutral", "numbers": numbers,
+                 "target_bpm": tb, "params": GOAL_PARAMS[goal]}, False)
 
 
 def session_length_sec(numbers: dict, fn, rng) -> tuple[int, str]:
@@ -191,7 +193,8 @@ def main() -> None:
     sid, _uid, resting, maxhr, _goal, _dur, fn = ARCHETYPES[idx]
 
     intent, nlp_real = get_intent(prompt)
-    intent = {**intent, "target_bpm": None}          # nel tester il passo lo dà la performance, non il prompt
+    # regime QUANTITATIVO se il prompt dichiara un passo (es. "12 km/h", "5:00 min/km"): la
+    # musica tiene il BPM voluto; QUALITATIVO se non c'è un numero -> insegue la velocità generata.
     rng = random.Random(a.seed)                       # None = casuale ogni volta; --seed = riproducibile
     total_sec, scale = session_length_sec(intent["numbers"], fn, rng)
     states = generate_session(fn, resting, maxhr, total_sec, a.song_seconds, rng)
