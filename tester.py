@@ -1,17 +1,20 @@
-"""tester.py — tester di RUNMAXXIN: PROMPT + scelta di un ARCHETIPO di prestazione -> play.
+"""tester.py — RUNMAXXIN tester: a PROMPT + a chosen PERFORMANCE archetype -> playback.
 
-Niente più curve/distanza a mano (era un controsenso: la distanza è un risultato, non un input).
-Scegli una frase e uno dei profili di corsa realistici generati da `simulate_sessions.py`, e
-guardi come la pipeline reagisce, canzone per canzone (6s l'una): sensori, target che insegue
-la velocità, canzone scelta e le Top-3 candidate. Stesso profilo con prompt diversi (o viceversa)
-mostra come cambia la musica — è la matrice prompt × prestazione.
+No hand-drawn curves/distance (that was a contradiction: distance is an output, not an input).
+Pick a sentence and one of the realistic run profiles produced by `simulate_sessions.py`, and
+watch how the pipeline reacts, song by song (6s each): sensors, target (BPM follows speed), the
+chosen song and the Top-3 candidates. Same profile with different prompts (or vice versa) shows
+how the music changes — the prompt x performance matrix. At the end it prints a workout summary
+with the session stats and the full playlist (every song, with BPM and genre).
 
-Uso:  python tester.py
+Usage:  python tester.py
 """
 from __future__ import annotations
 
 import argparse
 import time
+from collections import Counter
+from statistics import mean
 
 from rich.columns import Columns
 from rich.console import Console, Group
@@ -31,12 +34,12 @@ SPARK = "▁▂▃▄▅▆▇█"
 WINDOWS = "data/processed/physiological_windows.csv"
 
 DESCRIPTIONS = {
-    "steady": "ritmo costante in zona, nessun affaticamento",
-    "push_fatigue": "parte forte poi cede: cuore su, velocità giù",
-    "negative_split": "parte piano e accelera, ben gestito",
-    "intervals": "ripetute: velocità e cuore che oscillano",
-    "easy_recovery": "corsetta blanda, sforzo basso costante",
-    "beginner_struggle": "erratico: cuore alto anche piano, pause camminata",
+    "steady": "steady pace in the target zone, no fatigue",
+    "push_fatigue": "starts hard then fades: HR up, speed down",
+    "negative_split": "starts easy and accelerates, well-paced",
+    "intervals": "intervals: speed and HR oscillate",
+    "easy_recovery": "easy recovery run, low steady effort",
+    "beginner_struggle": "erratic: high HR even when slow, walk breaks",
 }
 
 
@@ -51,12 +54,13 @@ def ask(label: str, default: str) -> str:
 def spark_series(values: list[float], n: int = 40) -> Text:
     if not values:
         return Text("")
-    lo, hi = min(values), max(values)
+    tail = values[-n:]
+    lo, hi = min(tail), max(tail)
     rng = (hi - lo) or 1.0
     t = Text()
-    for k, v in enumerate(values[-n:]):
+    for k, v in enumerate(tail):
         ch = SPARK[min(7, int((v - lo) / rng * 7 + 0.5))]
-        t.append(ch, style="bold black on cyan" if k == len(values[-n:]) - 1 else "cyan")
+        t.append(ch, style="bold black on cyan" if k == len(tail) - 1 else "cyan")
     return t
 
 
@@ -91,65 +95,91 @@ def render(prompt, intent, nlp_real, sid, t_min, hrr_hist, spd_hist,
         ("▶ ", "bold"), (prompt, "italic white"),
         (f"    → goal={intent['goal']} mood={intent['mood']}", "white"),
         ("  (SetFit)" if nlp_real else "  (fallback)", "dim"),
-        (f"    prestazione: {sid}   t={t_min:.0f} min", "dim white"))
+        (f"    performance: {sid}   t={t_min:.0f} min", "dim white"))
     header = Panel(itxt, title="RUNMAXXIN — tester", border_style="magenta")
 
     trend = Table.grid(padding=(0, 1))
-    trend.add_row(Text("cuore   ", style="red"), spark_series(hrr_hist),
+    trend.add_row(Text("heart", style="red"), spark_series(hrr_hist),
                   Text(f"HRR {state['mean_hrr']:.2f}", style="bold red"))
-    trend.add_row(Text("velocità", style="green"), spark_series(spd_hist),
+    trend.add_row(Text("speed", style="green"), spark_series(spd_hist),
                   Text(f"{state.get('mean_speed_kmh') or 0:.1f} km/h", style="bold green"))
-    andamento = Panel(trend, title="andamento (▮ = adesso)", border_style="blue")
+    trend_panel = Panel(trend, title="trend so far (▮ = now)", border_style="blue")
 
     sens = Table.grid(padding=(0, 1))
-    hrr = state["mean_hrr"]
-    bcol = "green" if hrr < 0.70 else "yellow" if hrr < 0.85 else "red"
-    sens.add_row("sforzo", state["effort_state"])
+    sens.add_row("effort", state["effort_state"])
     sens.add_row("trend", state["trend_state"])
-    sensori = Panel(sens, title="SENSORI (physiological_state)", border_style="blue")
+    sensors = Panel(sens, title="SENSORS (physiological_state)", border_style="blue")
 
     tgt = Table.grid(padding=(0, 1))
     tgt.add_row("bpm", f"{target.bpm}")
     tgt.add_row("energy", f"{target.energy}")
-    reg = "RECUPERO ⚠" if target.recovery else target.regime
+    reg = "RECOVERY ⚠" if target.recovery else target.regime
     tgt.add_row("regime", Text(reg, style=_REGIME_STYLE.get(target.regime, "white")))
-    bersaglio = Panel(tgt, title="TARGET (i bpm inseguono la velocità)", border_style="green")
+    target_panel = Panel(tgt, title="TARGET (BPM follows speed)", border_style="green")
 
     now = Table.grid(padding=(0, 1))
     now.add_row(Text(str(song["title"]), style="bold white"))
     now.add_row(Text.assemble((f"{song['genre']}", "cyan"), ("  ·  ", "dim"),
                               (f"{song['bpm']} bpm", "white"),
-                              ("   [gate ✓ sforzo corretto]" if gate_hit else "", "yellow")))
+                              ("   [gate ✓ effort corrected]" if gate_hit else "", "yellow")))
     now.add_row(Text(f"▶ {song.get('spotify_url', '')}", style="dim green"))
-    playing = Panel(now, title="♪ ORA IN RIPRODUZIONE", border_style="bright_magenta")
+    playing = Panel(now, title="♪ NOW PLAYING", border_style="bright_magenta")
 
     top3 = Table(expand=True, border_style="dim")
-    for col in ("#", "canzone", "genere", "bpm", "P%", ""):
+    for col in ("#", "song", "genre", "bpm", "P%", ""):
         top3.add_column(col)
     chosen_id = str(song["song_id"])
     for rank, (_, r) in enumerate(top_df.head(3).iterrows(), 1):
-        mark = "◀ scelta" if str(r["song_id"]) == chosen_id else ""
+        mark = "◀ chosen" if str(r["song_id"]) == chosen_id else ""
         top3.add_row(str(rank), Text(str(r["title"])[:24], style="bold white" if mark else "white"),
                      str(r["genre"]), f"{r['bpm']:.0f}", f"{r['probability_percent']:.1f}",
                      Text(mark, style="green"))
-    candidati = Panel(top3, title="TOP 3 candidati (recommender)", border_style="dim")
+    candidates = Panel(top3, title="TOP 3 candidates (recommender)", border_style="dim")
 
-    return Group(header, andamento, Columns([sensori, bersaglio], expand=True), playing, candidati)
+    return Group(header, trend_panel, Columns([sensors, target_panel], expand=True), playing, candidates)
+
+
+def print_summary(sid, prompt, intent, playlist, hrr_hist, spd_hist):
+    avg_hrr, peak_hrr = mean(hrr_hist), max(hrr_hist)
+    avg_spd, peak_spd = mean(spd_hist), max(spd_hist)
+    efforts = Counter(p["effort"] for p in playlist)
+    recov = sum(1 for p in playlist if p["regime"] == "recovery")
+    duration = playlist[-1]["t"] if playlist else 0
+
+    stats = Table.grid(padding=(0, 2))
+    stats.add_row(Text("Performance", style="bold"), sid)
+    stats.add_row(Text("Prompt", style="bold"), prompt)
+    stats.add_row(Text("Intent", style="bold"), f"{intent['goal']} · {intent['mood']}")
+    stats.add_row(Text("Duration", style="bold"), f"~{duration:.0f} min")
+    stats.add_row(Text("Songs played", style="bold"), str(len(playlist)))
+    stats.add_row(Text("Avg / peak HRR", style="bold"), f"{avg_hrr:.2f} / {peak_hrr:.2f}")
+    stats.add_row(Text("Avg / peak speed", style="bold"), f"{avg_spd:.1f} / {peak_spd:.1f} km/h")
+    stats.add_row(Text("Effort mix", style="bold"), ", ".join(f"{k}: {v}" for k, v in efforts.most_common()))
+    stats.add_row(Text("Recovery songs", style="bold"), str(recov))
+    console.print(Panel(stats, title="WORKOUT SUMMARY", border_style="green"))
+
+    pl = Table(title="PLAYLIST — every song chosen", expand=True, border_style="bright_magenta")
+    for c in ("#", "time", "title", "artist", "genre", "bpm", "regime"):
+        pl.add_column(c)
+    for i, p in enumerate(playlist, 1):
+        pl.add_row(str(i), f"{p['t']:.0f}m", str(p["title"])[:26], str(p["artist"])[:18],
+                   p["genre"], f"{p['bpm']:.0f}", p["regime"])
+    console.print(pl)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Tester RUNMAXXIN (prompt × prestazione).")
+    ap = argparse.ArgumentParser(description="RUNMAXXIN tester (prompt x performance).")
     ap.add_argument("--seconds-per-song", type=float, default=6.0)
-    ap.add_argument("--song-seconds", type=int, default=180, help="secondi di corsa per canzone")
+    ap.add_argument("--song-seconds", type=int, default=180, help="seconds of running per song")
     a = ap.parse_args()
 
-    console.print("[bold magenta]RUNMAXXIN — tester[/bold magenta]  (Invio = default)\n")
-    prompt = ask("Prompt", "oggi voglio spingere tantissimo")
+    console.print("[bold magenta]RUNMAXXIN — tester[/bold magenta]  (Enter = default)\n")
+    prompt = ask("Prompt", "today I want to push really hard")
 
-    console.print("\n[bold]Scegli una prestazione:[/bold]")
+    console.print("\n[bold]Choose a performance:[/bold]")
     for i, (sid, _u, _r, _m, goal, dur, _fn) in enumerate(ARCHETYPES, 1):
         console.print(f"  {i}. [cyan]{sid}[/cyan] ({dur // 60} min) — {DESCRIPTIONS.get(sid, '')}")
-    idx = int(ask("Numero prestazione", "2")) - 1
+    idx = int(ask("Performance number", "2")) - 1
     sid = ARCHETYPES[idx][0]
 
     intent, nlp_real = get_intent(prompt)
@@ -157,8 +187,8 @@ def main() -> None:
     windows = [w for w in load(WINDOWS) if w["session_id"] == sid]
     blocks = group_by_song(windows, a.song_seconds)
 
-    console.print(f"\n[dim]{sid} · {len(blocks)} canzoni · ▶ play…[/dim]")
-    played, last_bpm, hrr_hist, spd_hist = [], None, [], []
+    console.print(f"\n[dim]{sid} · {len(blocks)} songs · ▶ play…[/dim]")
+    played, last_bpm, hrr_hist, spd_hist, playlist = [], None, [], [], []
     with Live(console=console, refresh_per_second=8, screen=False) as live:
         for block in blocks:
             state = aggregate(block)
@@ -170,10 +200,17 @@ def main() -> None:
             song, gate_hit = choose_song(target, top, effort_by_song)
             played.append(str(song["song_id"]))
             last_bpm = float(song["bpm"])
+            playlist.append({"t": t_min, "title": song["title"], "artist": song["artist"],
+                             "genre": song["genre"], "bpm": float(song["bpm"]),
+                             "regime": "recovery" if target.recovery else target.regime,
+                             "effort": state["effort_state"]})
             live.update(render(prompt, intent, nlp_real, sid, t_min, hrr_hist, spd_hist,
                                state, target, song, gate_hit, top))
             time.sleep(a.seconds_per_song)
-    console.print("\n[bold green]Allenamento finito.[/bold green]")
+
+    console.print("\n[bold green]Workout finished.[/bold green]\n")
+    if playlist:
+        print_summary(sid, prompt, intent, playlist, hrr_hist, spd_hist)
 
 
 if __name__ == "__main__":
