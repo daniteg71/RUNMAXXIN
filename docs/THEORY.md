@@ -54,21 +54,22 @@ pendenza = regressione lineare dei BPM sul tempo
 
 ## Ontologia mood → generi (OWL: `ontology/genre_mood.owl`, `genre_mood.py`)
 
-### O1. Associazione mood → generi (per la modalità qualitativa)
-L'ontologia fornisce uno **strato simbolico** (OWL: `owl:Class` Mood/Genre, `owl:ObjectProperty`
-genreSuitsMood/dominantMood, `owl:NamedIndividual`) che, dato un mood, restituisce i generi
-candidati. Le affinità mood–genere sono **popolate empiricamente** (*ontology population*) dalle
-distribuzioni di feature osservate nel catalogo: un genere è associato (`ar:genreSuitsMood`) a
-ogni mood la cui evidenza `e` supera una soglia, più sempre il dominante (`ar:dominantMood`).
-```
-e(genre, mood)          = evidenza osservata del mood fra i brani del genere
-genreSuitsMood(genre)   = { mood : e ≥ 0.25 } ∪ { argmax_mood e }
-```
-- ✅ **Russell 1980** (circumplex valenza × arousal) e **Karageorghis & Terry 2009**
-  (tempo/energia ↔ arousal): giustificano perché il mood orienti la scelta musicale.
+### O1. Associazione mood → generi (per la modalità qualitativa) — **knowledge-driven**
+L'ontologia è uno **strato simbolico** (OWL: `owl:Class` Mood/Genre, `owl:ObjectProperty`
+genreSuitsMood/dominantMood, `owl:NamedIndividual`). Le associazioni mood↔genere sono definite
+**a priori dalla teoria**, non dedotte dai dati:
+- ✅ **Russell 1980** — piano valenza × arousal: ogni mood è una **regione** di quel piano.
+- ✅ **Karageorghis & Terry 2009** — l'arousal musicale dipende da tempo/energia: ogni
+  **famiglia di generi** ha un archetipo (arousal, valenza) noto dalla letteratura.
+- **Regola**: `genreSuitsMood(genre)` = i mood la cui regione di Russell contiene l'archetipo
+  del genere (es. metal/punk → alta attivazione → Energetic; ambient/classical → bassa
+  attivazione → Calm; pop/latin → valenza alta → Motivated).
 - ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti.
-- ⚙️ soglia 0.25 e multi-appartenenza = scelta di design → ablation. *Ontology population*: la
-  struttura OWL è a priori, le affinità sono popolate dall'evidenza empirica (poi validabile).
+
+Separazione **T-Box / A-Box** (Lezoche): la **T-Box** (classi, proprietà, regole di affinità) è
+knowledge-driven, definita a priori; il **catalogo** `songs.csv` popola solo le **istanze**
+(quali generi esistono, A-Box) e può poi **validare** l'ontologia (accordo con `supports_mood`
+come test set), NON la costruisce. ⚙️ gli archetipi per famiglia = scelta di design → ablation.
 
 Uso: in regime QUALITATIVO (nessun BPM 'chirurgico'), `genres_for_mood(mood)` restituisce i
 generi candidati fra cui il recommender pesca le canzoni.

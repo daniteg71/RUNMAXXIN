@@ -48,10 +48,12 @@ Due "regimi": **quantitativo** (l'utente dichiara una velocità → BPM preciso)
 
 ### Ontologia mood → generi (`ontology/genre_mood.owl`, `genre_mood.py`)
 Ontologia OWL (classi `Mood`/`Genre`, proprietà `genreSuitsMood`/`dominantMood`, individui).
-Fornisce, dato un mood, i generi candidati per il regime qualitativo. Le affinità mood–genere
-sono **ricavate dalle distribuzioni osservate nel catalogo** (*ontology population*): un genere
-è associato a un mood se l'evidenza supera una soglia (0.25), più il mood dominante.
-`build_mood_ontology.py` rigenera il file; `genre_mood.py` lo interroga (`genres_for_mood`).
+Fornisce, dato un mood, i generi candidati per il regime qualitativo. È **knowledge-driven**:
+le associazioni mood↔genere sono definite **a priori dalla teoria** (Russell 1980, valenza ×
+arousal; Karageorghis & Terry 2009, arousal per famiglia di generi), non dedotte dai dati. Il
+catalogo `songs.csv` popola **solo le istanze** (quali generi esistono, A-Box) e può validare
+l'ontologia; non definisce le regole (T-Box). `build_mood_ontology.py` rigenera il file;
+`genre_mood.py` lo interroga (`genres_for_mood`).
 
 ### Controller — genera il vettore target (`controller.py`)
 `decide(intent, analysis, last_bpm, elapsed_min)` produce un `Target` = vettore
@@ -124,8 +126,7 @@ Rada 1989 per l'ontologia). Le scelte di design (soglie, pesi, τ) sono dichiara
 - I modelli SetFit sono few-shot: coprono le frasi tipiche ma possono sbagliare su formulazioni
   fuori distribuzione (per questo c'è l'override a parole-chiave e, a valle, la correzione dei sensori).
 - I dati delle sessioni sono **simulati**, non misurati.
-- L'ontologia è **popolata empiricamente** dal catalogo: se il recommender venisse valutato
-  sulle stesse etichette (`supports_mood`) la metrica sarebbe circolare — va valutato con un
-  segnale indipendente.
+- L'ontologia è **knowledge-driven** (teoria di Russell): essendo indipendente dalle etichette
+  `supports_mood`, queste possono essere usate come **test set** per validarla (accordo osservato).
 - La velocità NON determina il tipo di allenamento (è relativa alla forma dell'atleta): lo sforzo
   reale lo misurano i sensori.
