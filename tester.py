@@ -1,14 +1,17 @@
 """tester.py — tester interattivo di RUNMAXXIN.
 
-Modelli DUE curve a punti di controllo — la FATICA (battito) e la VELOCITA' — e guardi come
-la pipeline reagisce, canzone per canzone (6 secondi l'una). I BPM del target inseguono la
-velocità che imposti; il battito guida sforzo e sicurezza. Sei tu il sensore.
+Modelli DUE curve a punti di controllo — lo SFORZO (in %, 0-100) e la VELOCITÀ (km/h) — su una
+DISTANZA che scegli tu (km), e guardi come la pipeline reagisce, canzone per canzone (6s l'una).
 
-Un "punto di controllo" = un numero; il tester interpola linearmente tra i punti per avere il
-valore a ogni istante (vedi docs). HRR/sforzo/trend sono calcolati dal file base
-`physiological_state.py`.
+Come si legge:
+- lo SFORZO % → HRR (riserva cardiaca): via Karvonen inverso diventa un battito, lo sforzo lo
+  classifica il file base `physiological_state.py`; guida sicurezza/recupero.
+- la VELOCITÀ → guida i BPM che la musica insegue (entrainment continuo).
+- la DISTANZA + la velocità → determinano il TEMPO (piano ⇒ ci metti di più ⇒ più canzoni).
 
-Uso:  python tester.py            # interattivo (chiede prompt, durata, profilo, curve)
+Un "punto di controllo" = un numero; il tester interpola linearmente tra i punti.
+
+Uso:  python tester.py            # interattivo
 """
 from __future__ import annotations
 
@@ -24,12 +27,14 @@ from rich.text import Text
 
 from controller import decide
 from symbolic import is_effort_compatible
-from physiological_state import classify_effort, classify_trend, compute_hrr
+from physiological_state import classify_effort, classify_trend
 from session import TOP_K, load_effort_by_song
 import recommender
 
 console = Console()
 SPARK = "▁▂▃▄▅▆▇█"
+N_SUB = 240          # sotto-passi per integrare la distanza
+MAX_SONGS = 40       # tetto di sicurezza sul numero di canzoni
 
 
 def ask(label: str, default: str) -> str:
@@ -45,7 +50,6 @@ def nums(s: str) -> list[float]:
 
 
 def interp(points: list[float], frac: float) -> float:
-    """Valore sulla curva a punti di controllo, alla frazione frac in [0,1] (interpolazione lineare)."""
     if len(points) == 1:
         return points[0]
     pos = frac * (len(points) - 1)
@@ -56,7 +60,6 @@ def interp(points: list[float], frac: float) -> float:
 
 
 def spark_text(points: list[float], frac: float, n: int = 34) -> Text:
-    """Sparkline ASCII della curva, col punto corrente evidenziato."""
     vals = [interp(points, k / (n - 1)) for k in range(n)]
     lo, hi = min(vals), max(vals)
     rng = (hi - lo) or 1.0
@@ -89,33 +92,49 @@ def choose_song(target, top_df, effort_by_song):
     return top_df.iloc[0], False
 
 
+def plan_songs(distance_km, speed_pts, step_min):
+    """Integra la velocità sulla distanza -> lista di step-canzone (frac, tempo_min).
+    Piano => stesso km richiede più tempo => più canzoni in quel tratto."""
+    steps, cum_time, next_song = [], 0.0, 0.0
+    seg_km = distance_km / N_SUB
+    for i in range(N_SUB):
+        f = i / (N_SUB - 1)
+        v = max(0.5, interp(speed_pts, f))          # km/h (evita divisioni per ~0)
+        cum_time += seg_km / v * 60.0               # minuti per questo tratto
+        if cum_time >= next_song and len(steps) < MAX_SONGS:
+            steps.append((f, cum_time))
+            next_song += step_min
+    return steps, cum_time
+
+
 _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
                  "quantitative": "green", "qualitative": "cyan"}
 
 
-def render(prompt, intent, nlp_real, fatigue_pts, speed_pts, frac,
-           bpm_raw, speed, state, target, song, gate_hit):
+def render(prompt, intent, nlp_real, effort_pts, speed_pts, f, pct, disp_bpm,
+           speed, t_min, state, target, song, gate_hit):
     itxt = Text.assemble(
         ("▶ ", "bold"), (prompt, "italic white"),
         (f"    → goal={intent['goal']} mood={intent['mood']}", "white"),
-        ("  (SetFit)" if nlp_real else "  (fallback keyword)", "dim"))
+        ("  (SetFit)" if nlp_real else "  (fallback keyword)", "dim"),
+        (f"    t={t_min:.1f} min", "dim white"))
     header = Panel(itxt, title="RUNMAXXIN — tester", border_style="magenta")
 
     curve = Table.grid(padding=(0, 1))
-    curve.add_row(Text("FATICA (bpm)", style="red"), spark_text(fatigue_pts, frac),
-                  Text(f"{bpm_raw:.0f}", style="bold red"))
-    curve.add_row(Text("VELOCITÀ    ", style="green"), spark_text(speed_pts, frac),
+    curve.add_row(Text("SFORZO %", style="red"), spark_text(effort_pts, f),
+                  Text(f"{pct:.0f}%  (~{disp_bpm:.0f} bpm)", style="bold red"))
+    curve.add_row(Text("VELOCITÀ", style="green"), spark_text(speed_pts, f),
                   Text(f"{speed:.1f} km/h", style="bold green"))
     curve_panel = Panel(curve, title="le tue curve (▮ = adesso)", border_style="blue")
 
     sens = Table.grid(padding=(0, 1))
     hrr = state["mean_hrr"]
-    barcol = "green" if hrr < 0.70 else "yellow" if hrr < 0.85 else "red"
-    bar = Text("█" * int(hrr * 12) + "░" * (12 - int(hrr * 12)), style=barcol)
+    bcol = "green" if hrr < 0.70 else "yellow" if hrr < 0.85 else "red"
+    bar = Text("█" * int(hrr * 12) + "░" * (12 - int(hrr * 12)), style=bcol)
     sens.add_row("HRR", Text.assemble(bar, (f" {hrr:.2f}", "white")))
     sens.add_row("sforzo", state["effort_state"])
     sens.add_row("trend", state["trend_state"])
-    sensori = Panel(sens, title="SENSORI (dal tuo physiological_state)", border_style="blue")
+    sensori = Panel(sens, title="SENSORI (physiological_state)", border_style="blue")
 
     tgt = Table.grid(padding=(0, 1))
     tgt.add_row("bpm", f"{target.bpm}")
@@ -141,37 +160,36 @@ def main() -> None:
     ap.add_argument("--step-min", type=float, default=3.0, help="minuti di corsa per canzone")
     a = ap.parse_args()
 
-    console.print("[bold magenta]RUNMAXXIN — tester interattivo[/bold magenta]  (Invio = valore di default)\n")
+    console.print("[bold magenta]RUNMAXXIN — tester interattivo[/bold magenta]  (Invio = default)\n")
     prompt = ask("Prompt", "oggi voglio spingere tantissimo")
-    duration = float(ask("Durata allenamento (min)", "30"))
+    distance = float(ask("Distanza da percorrere (km)", "8"))
     resting = float(ask("Battito a riposo", "55"))
     maxhr = float(ask("Battito massimo", "190"))
-    fatigue_pts = nums(ask("Curva FATICA — battiti ai punti di controllo", "120 150 175 185 175"))
-    speed_pts = nums(ask("Curva VELOCITÀ — km/h ai punti di controllo", "10 13 16 12 9"))
+    effort_pts = nums(ask("Curva SFORZO — % (0-100) ai punti di controllo", "40 60 80 92 80"))
+    speed_pts = nums(ask("Curva VELOCITÀ — km/h ai punti di controllo", "10 13 16 12 8"))
 
     intent, nlp_real = get_intent(prompt)
     effort_by_song = load_effort_by_song()
-    n_steps = max(1, round(duration / a.step_min))
+    steps, total_time = plan_songs(distance, speed_pts, a.step_min)
+    console.print(f"\n[dim]{distance:.1f} km · ~{total_time:.0f} min · {len(steps)} canzoni · ▶ play…[/dim]")
 
-    console.print("\n[dim]▶ play…[/dim]")
     played, prev_bpm = [], None
     with Live(console=console, refresh_per_second=8, screen=False) as live:
-        for s in range(n_steps):
-            frac = s / (n_steps - 1) if n_steps > 1 else 0.0
-            t_min = frac * duration
-            bpm_raw = interp(fatigue_pts, frac)
-            speed = interp(speed_pts, frac)
-            hrr = compute_hrr(bpm_raw, resting, maxhr)
-            slope = 0.0 if prev_bpm is None else (bpm_raw - prev_bpm) / (a.step_min * 60)
+        for f, t_min in steps:
+            pct = interp(effort_pts, f)
+            hrr = max(0.0, min(1.2, pct / 100.0))               # % sforzo -> HRR
+            disp_bpm = resting + hrr * (maxhr - resting)         # Karvonen inverso (per display/trend)
+            speed = interp(speed_pts, f)
+            slope = 0.0 if prev_bpm is None else (disp_bpm - prev_bpm) / (a.step_min * 60)
             state = {"mean_hrr": hrr, "effort_state": classify_effort(hrr),
                      "trend_state": classify_trend(slope), "mean_speed_kmh": speed}
             target = decide(intent, state, prev_bpm, elapsed_min=t_min)
             top = recommender.recommend(target, top_k=TOP_K, exclude_song_ids=played)
             song, gate_hit = choose_song(target, top, effort_by_song)
             played.append(str(song["song_id"]))
-            prev_bpm = bpm_raw
-            live.update(render(prompt, intent, nlp_real, fatigue_pts, speed_pts, frac,
-                               bpm_raw, speed, state, target, song, gate_hit))
+            prev_bpm = disp_bpm
+            live.update(render(prompt, intent, nlp_real, effort_pts, speed_pts, f, pct,
+                               disp_bpm, speed, t_min, state, target, song, gate_hit))
             time.sleep(a.seconds_per_song)
     console.print("\n[bold green]Allenamento finito.[/bold green]")
 
