@@ -9,6 +9,8 @@ Due casi opposti:
   B) 'push_then_fatigue'  — dice di voler spingere tantissimo, parte forte, poi si affatica:
                              il cuore sale (drift) ma la velocita' CROLLA -> va molto piu' lento.
 
+Ogni sessione dura 30 minuti (una riga al secondo).
+
 Uso:  python simulate_sessions.py
 """
 from __future__ import annotations
@@ -18,7 +20,7 @@ import math
 from pathlib import Path
 
 OUT = Path(__file__).parent / "data" / "simulated" / "bpm_sessions.csv"
-DURATION = 360   # secondi (6 minuti) per sessione
+DURATION = 1800   # secondi (30 minuti) per sessione
 
 COLUMNS = ["session_id", "user_id", "second", "bpm", "resting_hr", "max_hr",
            "workout_goal", "phase", "speed_kmh", "cadence_spm"]
@@ -32,10 +34,10 @@ def marathon_ontarget() -> list[dict]:
     """Atleta preciso: riscaldamento poi zona target stabile, nessun affaticamento."""
     rows = []
     for s in range(DURATION):
-        if s < 60:                                   # riscaldamento
-            t = s / 60
+        if s < 300:                                  # riscaldamento (5 min)
+            t = s / 300
             bpm, speed, cad, phase = lerp(120, 140, t), lerp(10, 15, t), lerp(165, 180, t), "warmup"
-        else:                                        # zona target, costante
+        else:                                        # zona target, costante (25 min)
             bpm = 140 + 1.0 * math.sin(s / 15)       # micro-oscillazione, std bassissima
             speed, cad, phase = 15.0, 180.0, "run"
         rows.append({"session_id": "marathon_ontarget", "user_id": "athlete_A", "second": s,
@@ -49,12 +51,12 @@ def push_then_fatigue() -> list[dict]:
     """Parte fortissimo poi si affatica: HR sale (drift), velocita' crolla."""
     rows = []
     for s in range(DURATION):
-        if s < 90:                                   # spinta iniziale
-            t = s / 90
+        if s < 420:                                  # spinta iniziale (7 min)
+            t = s / 420
             bpm, speed, cad, phase = lerp(150, 180, t), lerp(14, 17, t), lerp(180, 188, t), "push"
-        else:                                        # affaticamento
-            t = (s - 90) / (DURATION - 90)
-            bpm, speed, cad, phase = lerp(180, 190, t), lerp(17, 10, t), lerp(188, 158, t), "fatigue"
+        else:                                        # affaticamento progressivo (23 min)
+            t = (s - 420) / (DURATION - 420)
+            bpm, speed, cad, phase = lerp(180, 192, t), lerp(17, 9, t), lerp(188, 155, t), "fatigue"
         rows.append({"session_id": "push_then_fatigue", "user_id": "runner_B", "second": s,
                      "bpm": round(bpm, 1), "resting_hr": 60, "max_hr": 195,
                      "workout_goal": "IntenseRun", "phase": phase,
