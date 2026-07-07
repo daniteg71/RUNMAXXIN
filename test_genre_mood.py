@@ -1,18 +1,17 @@
-"""Test dell'ontologia mood -> generi (deterministici, senza modelli).
+"""Test del dizionario mood -> generi (deterministici, senza modelli).
 
-Verifica che l'ontologia sia coerente col vocabolario e col catalogo songs.csv:
-mood validi, ogni mood non vuoto, generi ⊆ generi del CSV, dominante ∈ associati.
+Verifica che sia coerente col vocabolario e col catalogo songs.csv: mood validi, ogni
+mood non vuoto, generi ⊆ generi del CSV, dominante ∈ associati.
 """
 import csv
 from pathlib import Path
 
 from intent import MOOD_LABELS
-from genre_mood import (dominant_genres_for_mood, genres_for_mood,
-                        moods_for_genre)
+from genre_mood import (GENRE_TO_MOODS, dominant_genres_for_mood,
+                        genres_for_mood, moods_for_genre)
 
 BASE = Path(__file__).parent
 CSV = BASE / "songs.csv"
-OWL = BASE / "ontology" / "genre_mood.owl"
 
 
 def _csv_genres() -> set[str]:
@@ -20,8 +19,8 @@ def _csv_genres() -> set[str]:
         return {(r.get("genre") or "").strip() for r in csv.DictReader(f) if r.get("genre")}
 
 
-def test_owl_exists():
-    assert OWL.exists(), "ontology/genre_mood.owl mancante: esegui build_mood_ontology.py"
+def test_dictionary_built():
+    assert GENRE_TO_MOODS, "GENRE_TO_MOODS vuoto: la costruzione da songs.csv e' fallita"
 
 
 def test_every_mood_has_genres():

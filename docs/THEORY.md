@@ -52,24 +52,23 @@ pendenza = regressione lineare dei BPM sul tempo
 ```
 - ⚙️ soglia 0.05 bpm/s (~3 bpm) = design.
 
-## Ontologia mood → generi (OWL: `ontology/genre_mood.owl`, `genre_mood.py`)
+## Mood → generi: dizionario Python (`genre_mood.py`)
 
-### O1. Associazione mood → generi (per la modalità qualitativa) — **knowledge-driven**
-L'ontologia è uno **strato simbolico** (OWL: `owl:Class` Mood/Genre, `owl:ObjectProperty`
-genreSuitsMood/dominantMood, `owl:NamedIndividual`). Le associazioni mood↔genere sono definite
-**a priori dalla teoria**, non dedotte dai dati:
+### O1. Associazione mood → generi (per la modalità qualitativa) — knowledge-driven
+Era un file OWL letto a regex: funzionalmente era già un dizionario (nessuna query, nessuna
+inferenza), solo scritto in un formato più complicato — dichiarato per quello che è.
+La **regola** resta definita **a priori dalla teoria**, non dedotta dai dati:
 - ✅ **Russell 1980** — piano valenza × arousal: ogni mood è una **regione** di quel piano.
 - ✅ **Karageorghis & Terry 2009** — l'arousal musicale dipende da tempo/energia: ogni
   **famiglia di generi** ha un archetipo (arousal, valenza) noto dalla letteratura.
-- **Regola**: `genreSuitsMood(genre)` = i mood la cui regione di Russell contiene l'archetipo
-  del genere (es. metal/punk → alta attivazione → Energetic; ambient/classical → bassa
+- **Regola**: `genres_for_mood(mood)` = i generi il cui archetipo cade nella regione di Russell
+  di quel mood (es. metal/punk → alta attivazione → Energetic; ambient/classical → bassa
   attivazione → Calm; pop/latin → valenza alta → Motivated).
-- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti.
+- ✅ **Rada et al. 1989** — i generi come rete di concetti (idea ripresa nella regola per famiglie).
 
-Separazione **T-Box / A-Box** (Lezoche): la **T-Box** (classi, proprietà, regole di affinità) è
-knowledge-driven, definita a priori; il **catalogo** `songs.csv` popola solo le **istanze**
-(quali generi esistono, A-Box) e può poi **validare** l'ontologia (accordo con `supports_mood`
-come test set), NON la costruisce. ⚙️ gli archetipi per famiglia = scelta di design → ablation.
+`songs.csv` fornisce solo l'**elenco dei generi esistenti** (non le associazioni mood, che
+vengono dalla regola teorica sopra): il dizionario può poi essere **validato** contro
+`supports_mood` (test set), non è costruito da esso. ⚙️ gli archetipi per famiglia = design → ablation.
 
 Uso: in regime QUALITATIVO (nessun BPM 'chirurgico'), `genres_for_mood(mood)` restituisce i
 generi candidati fra cui il recommender pesca le canzoni.
@@ -112,6 +111,19 @@ IntenseRun/ripetute: alterna veloce/lento rispetto alla canzone precedente (`las
 variabilità di ritmo tipica del lavoro a intervalli. ⚙️ design, resta calcolo numerico in Python
 (non simbolico): interpolazioni e clamp non sono adatti a OWL/SWRL.
 
+### C6. Effort gate — Generator→Validator sul Top-K (`symbolic.is_effort_compatible`)
+Il recommender (§ sotto) ottimizza la distanza vettoriale `[bpm,energy,valence]` ma **ignora**
+la compatibilità di sforzo (`matches_effort` della canzone vs `effort_band` del target): misurato
+su un campione ampio di combinazioni goal×mood×sforzo×regime, il Top-1 viola l'`effort_band` nel
+**16.7% dei casi (20/120)**. `session.pick_valid_song` scorre le **Top-K** del recommender e
+sceglie, via query SPARQL (`is_effort_compatible`, stesso meccanismo di C3), la prima canzone
+compatibile; se nessuna lo è, logga la violazione e tiene il Top-1.
+- Pattern **Generator→Validator**: il modello statistico (recommender) **sovra-genera** candidati,
+  un layer simbolico separato **decide VALID/INVALID** — il recommender non cambia, resta
+  distanza+softmax puro.
+- Non è una scelta stilistica: la soglia di correzione (16.7%) è misurata prima di implementare
+  il gate, non assunta.
+
 ## Stadio 3 — Recommender (`recommender.py`)
 Riceve il `Target`, calcola la **distanza euclidea pesata** target↔canzone e assegna una
 probabilità con un **softmax**:
@@ -122,10 +134,10 @@ P(s) = softmax(−d(s)/τ) = exp(−d(s)/τ) / Σ_j exp(−d(j)/τ)
 - i pesi `w` sono normalizzati a somma 1; il **BPM è normalizzato da `bpm_tolerance`** (tol
   piccola → scarto di BPM più severo; grande → più permissivo);
 - restituisce le **Top-K** canzoni per probabilità, escludendo le tracce recenti (memoria) e,
-  in regime qualitativo, filtrando sui **generi del mood** forniti dall'ontologia.
+  in regime qualitativo, filtrando sui **generi del mood** (`genre_mood.py`); la compatibilità di
+  sforzo sul Top-K è verificata a valle dall'effort gate (C6), non dal recommender stesso.
 - ✅ **Sutton & Barto** — softmax/Boltzmann per exploration/exploitation (τ alto esplora, τ→0 sfrutta).
 - ⚙️ distanza euclidea pesata e normalizzazione del BPM via tolleranza = scelte di design → ablation.
-- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti (filtro del regime qualitativo).
 
 ---
 
