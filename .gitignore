@@ -1,0 +1,9 @@
+# Modelli SetFit addestrati (~449 MB l'uno): rigenerati da train_intent.py, NON in git.
+models/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+data/processed/

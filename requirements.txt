@@ -1,0 +1,10 @@
+# Stadio sensori (physiological_state.py, build_dataset.py)
+numpy>=1.26
+pandas>=2.0
+
+# Stadio NLP (intent.py, train_intent.py): SetFit few-shot classifica goal e mood.
+# NB: SetFit e' un Transformer -> tira dentro torch. Su Python 3.9: sentence-transformers<5.
+setfit>=1.1
+sentence-transformers<5
+datasets>=2.16
+scikit-learn>=1.4
