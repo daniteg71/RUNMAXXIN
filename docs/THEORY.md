@@ -47,6 +47,26 @@ pendenza = regressione lineare dei BPM sul tempo
 ```
 - ⚙️ soglia 0.05 bpm/s (~3 bpm) = design.
 
+## Ontologia mood → generi (`ontology/genre_mood.ttl`, `genre_mood.py`)
+
+### O1. Associazione mood → generi (per la modalità qualitativa)
+Per ognuno dei 5 mood si associano i generi del catalogo. L'affinità **non è inventata**: per
+ogni genere si misura nella colonna `supports_mood` di `songs.csv` la quota di brani che
+supportano ciascun mood; il genere è associato (`ar:genreSuitsMood`) a ogni mood con quota
+≥ soglia, più sempre il dominante (`ar:dominantMood`).
+```
+share(genre, mood) = #brani(genre, supports_mood ∋ mood) / #brani(genre)
+genreSuitsMood(genre) = { mood : share ≥ 0.25 } ∪ { argmax_mood share }
+```
+- ✅ **Russell 1980** (circumplex) e **Karageorghis & Terry 2009** (tempo/energia ↔ arousal):
+  giustificano perché il mood orienti la scelta musicale.
+- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti (SKOS `skos:Concept`).
+- ⚙️ soglia 0.25 e la multi-appartenenza = scelta di design → ablation. Stesso principio
+  data-grounded di `ar:genreSuitsEffort` in AlgoRun (affinità osservata, non a mano).
+
+Uso: in regime QUALITATIVO (nessun BPM 'chirurgico'), `genres_for_mood(mood)` restituisce i
+generi candidati fra cui il recommender pesca le canzoni.
+
 ## Stadio 3 — Recommender (fuori scope per ora)
 Softmax/Boltzmann per exploration/exploitation della prossima canzone.
 - ✅ **Sutton & Barto**, *Reinforcement Learning: An Introduction* — softmax (τ alto esplora, τ→0 sfrutta).
