@@ -14,6 +14,14 @@ Due responsabilità dell'ontologia (non un dizionario, non un `if` scritto a man
       Valida un numero estratto dal testo (intent.parse_numbers) contro il Constraint
       Gate SHACL in ontology/nlp_shapes.ttl (pyshacl): scarta velocità
       fisiologicamente assurde prima che arrivino a bpm_from_speed.
+
+  is_effort_compatible(song_efforts, effort_band) -> bool
+      Pattern Generator->Validator: il recommender (collega) sovra-genera Top-K
+      candidati per vicinanza vettoriale, che PUO' ignorare la compatibilità di
+      sforzo (misurato: 16.7% di violazioni su un campione ampio). Questa funzione
+      valida — via query SPARQL, stesso meccanismo di is_critical_state — se le
+      etichette matches_effort della canzone intersecano la effort_band del target;
+      chi chiama scorre il Top-K e accetta la prima canzone che valida.
 """
 from __future__ import annotations
 
@@ -46,6 +54,26 @@ def is_critical_state(mean_hrr: float) -> bool:
     return bool(graph.query(_CRITICAL_QUERY).askAnswer)
 
 
+_EFFORT_COMPATIBLE_QUERY = """
+PREFIX ar: <http://runmaxxin.org/ontology#>
+ASK {
+    ?song ar:hasEffort ?e .
+    ?target ar:allowsEffort ?e .
+}
+"""
+
+
+def is_effort_compatible(song_efforts: list[str], effort_band: tuple[str, ...]) -> bool:
+    """True se song_efforts e effort_band condividono almeno un'etichetta (query SPARQL)."""
+    graph = Graph()
+    song, target = AR.song, AR.target
+    for e in song_efforts:
+        graph.add((song, AR.hasEffort, AR[e]))
+    for e in effort_band:
+        graph.add((target, AR.allowsEffort, AR[e]))
+    return bool(graph.query(_EFFORT_COMPATIBLE_QUERY).askAnswer)
+
+
 def validate_speed(speed_kmh: float) -> bool:
     """True se la velocità rispetta il Constraint Gate SHACL (0, 45] km/h."""
     from pyshacl import validate
@@ -72,3 +100,8 @@ if __name__ == "__main__":
     print("\n== validate_speed (SHACL, pyshacl) ==")
     for v in (12.0, 40.0, 45.0, 45.1, 300.0, -5.0):
         print(f"  speed={v} km/h -> valid={validate_speed(v)}")
+
+    print("\n== is_effort_compatible (SPARQL, Top-K gate) ==")
+    print(" ", is_effort_compatible(["HighEffort"], ("TargetEffort",)))       # False
+    print(" ", is_effort_compatible(["TargetEffort"], ("TargetEffort",)))     # True
+    print(" ", is_effort_compatible(["Low", "HighEffort"], ("HighEffort", "VeryHighEffort")))  # True

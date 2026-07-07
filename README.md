@@ -46,14 +46,14 @@ Due "regimi": **quantitativo** (l'utente dichiara una velocità → BPM preciso)
 - **`train_intent.py`** addestra i due modelli SetFit dai loro esempi few-shot. I modelli
   (~449 MB l'uno) NON sono nel repo (gitignorati): si rigenerano con `python train_intent.py`.
 
-### Ontologia mood → generi (`ontology/genre_mood.owl`, `genre_mood.py`)
-Ontologia OWL (classi `Mood`/`Genre`, proprietà `genreSuitsMood`/`dominantMood`, individui).
-Fornisce, dato un mood, i generi candidati per il regime qualitativo. È **knowledge-driven**:
-le associazioni mood↔genere sono definite **a priori dalla teoria** (Russell 1980, valenza ×
-arousal; Karageorghis & Terry 2009, arousal per famiglia di generi), non dedotte dai dati. Il
-catalogo `songs.csv` popola **solo le istanze** (quali generi esistono, A-Box) e può validare
-l'ontologia; non definisce le regole (T-Box). `build_mood_ontology.py` rigenera il file;
-`genre_mood.py` lo interroga (`genres_for_mood`).
+### Mood → generi: dizionario (`genre_mood.py`)
+Era un file OWL letto a regex — funzionalmente già un dizionario (nessuna query, nessuna
+inferenza), solo scritto in un formato più complicato: ora è dichiarato per quello che è. La
+**regola** resta **knowledge-driven**: le associazioni mood↔genere sono definite **a priori
+dalla teoria** (Russell 1980, valenza × arousal; Karageorghis & Terry 2009, arousal per famiglia
+di generi), non dedotte dai dati. `songs.csv` fornisce solo l'**elenco dei generi esistenti**;
+il dizionario (`GENRE_TO_MOODS`) è calcolato una volta all'import, interrogabile con
+`genres_for_mood(mood)`.
 
 ### Controller — genera il vettore target (`controller.py`)
 `decide(intent, analysis, last_bpm, elapsed_min)` produce un `Target` = vettore
@@ -80,14 +80,20 @@ Due responsabilità reali dell'ontologia (non un lookup, non un `if` in Python):
   dall'NLP contro un vincolo fisiologico (0–45 km/h) — pattern "Constraint Gate": l'ontologia
   non genera dati, li restringe e valida. Una velocità assurda ("300 km/h") viene scartata
   esplicitamente invece di essere silenziosamente clampata più a valle.
+- **`is_effort_compatible(song_efforts, effort_band)`**: pattern **Generator→Validator**. Il
+  recommender ottimizza `[bpm,energy,valence]` ma ignora la compatibilità di sforzo — misurato:
+  il Top-1 viola l'`effort_band` nel **16.7% dei casi (20/120)** su un campione ampio. Una query
+  SPARQL verifica l'intersezione fra `matches_effort` della canzone e `effort_band` del target;
+  `session.pick_valid_song` scorre le Top-K del recommender e sceglie la prima compatibile.
 Il resto della logica del controller (riscaldamento, fusione, variazione, clamp) resta calcolo
 numerico in Python: OWL/SWRL non sono adatti al calcolo continuo, solo alla classificazione.
 
 ### Loop di sessione (`session.py`)
 Concatena gli stadi: calcola l'intento una volta, poi legge le finestre da 30s di
-`build_dataset`, le raggruppa per canzone, chiama `decide(...)` e passa il target al recommender.
-Il recommender è qui uno **stub** (canzone col BPM più vicino) — un gancio per il collega.
-`main.py` è una versione minimale (prompt → intento → target, senza loop).
+`build_dataset`, le raggruppa per canzone, chiama `decide(...)`, passa il target al
+**recommender del collega** (Top-K per distanza+softmax) e applica l'**effort gate** simbolico
+per scegliere la canzone finale. `main.py` è una versione minimale (prompt → intento → target →
+Top-K, senza loop né gate).
 
 ### Stadio 3 — Recommender (`recommender.py`)
 Riceve il `Target`, calcola la distanza euclidea pesata dai vettori-canzone (BPM normalizzato
@@ -133,16 +139,22 @@ Rada 1989 per l'ontologia). Le scelte di design (soglie, pesi, τ) sono dichiara
 |---|---|
 | Sensori (`physiological_state`, `build_dataset`) | forniti dal team |
 | NLP (`intent`, training, valutazione) | fatto |
-| Ontologia mood→generi | fatto |
+| Mood → generi (`genre_mood.py`, dizionario knowledge-driven) | fatto |
 | Controller (vettore target) | fatto |
-| Loop di sessione (`session.py`, `main.py`) | fatto (usa il recommender) |
+| Strato simbolico (`symbolic.py`: safety SPARQL, SHACL NLP, effort gate) | fatto |
+| Loop di sessione (`session.py`, `main.py`) | fatto (recommender + gate) |
 | Recommendation system (`recommender.py`) | fatto (distanza pesata + softmax) |
 
 ## Note oneste (limiti)
 - I modelli SetFit sono few-shot: coprono le frasi tipiche ma possono sbagliare su formulazioni
   fuori distribuzione (per questo c'è l'override a parole-chiave e, a valle, la correzione dei sensori).
 - I dati delle sessioni sono **simulati**, non misurati.
-- L'ontologia è **knowledge-driven** (teoria di Russell): essendo indipendente dalle etichette
-  `supports_mood`, queste possono essere usate come **test set** per validarla (accordo osservato).
+- Il dizionario mood→generi è **knowledge-driven** (teoria di Russell): essendo indipendente
+  dalle etichette `supports_mood`, queste possono essere usate come **test set** per validarlo
+  (accordo osservato), non per costruirlo.
 - La velocità NON determina il tipo di allenamento (è relativa alla forma dell'atleta): lo sforzo
   reale lo misurano i sensori.
+- Il layer simbolico (SPARQL/SHACL) classifica e valida **stati discreti** (soglie, insiemi
+  compatibili); non gestisce calcolo numerico continuo (riscaldamento, fusione, softmax), che
+  resta in Python — non è una limitazione di implementazione ma una scelta di dove il
+  ragionamento simbolico è appropriato.
