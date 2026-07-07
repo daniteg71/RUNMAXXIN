@@ -77,9 +77,14 @@ generi candidati fra cui il recommender pesca le canzoni.
 
 ### C1. Fusione testo ↔ sensori e regimi
 `decide(intent, analysis)` produce il vettore target `[bpm, energy, valence]` + raggio + `tau`.
-- **Quantitativo** (velocità dichiarata): target stretto attorno al `bpm` da cadenza
-  (Van Dyck 2015), `tau` basso → **exploit**.
-- **Qualitativo**: range largo, generi ristretti al mood (ontologia), `tau` più alto → **explore**.
+- **Quantitativo** (velocità *dichiarata nel prompt*): target stretto attorno al `bpm` da
+  cadenza (Van Dyck 2015), fisso al valore dichiarato, `tau` basso → **exploit**.
+- **Qualitativo** (nessun numero nel prompt): il centro del target **insegue la velocità
+  reale del momento** — `live_entrainment_bpm()` usa la **cadenza misurata** (1:1 coi passi,
+  Van Dyck continuo) o, in mancanza, la stima dalla velocità (`bpm_from_speed`). Range largo,
+  generi ristretti al mood, `tau` più alto → **explore**. Prima era il centro-banda fisso del
+  tipo; ora se "parti piano e poi spingi", la musica accelera con te. È un **unico punto di
+  verità** (`live_entrainment_bpm`), così la logica non è duplicata. ⚙️ design.
 - ✅ **Sutton & Barto** — `tau` è la temperatura del softmax/Boltzmann che regola
   exploration/exploitation: alto = varia, basso = preciso.
 - ✅ **Russell 1980** — `valence` target dal mood (`VALENCE_BY_MOOD`).

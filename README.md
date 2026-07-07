@@ -116,16 +116,24 @@ classificatori SetFit, e li confronta con il baseline a parole-chiave (ablation)
 Test deterministici (non caricano i modelli): regex dei numeri, `bpm_from_speed`, coerenza
 delle etichette col catalogo, override a parole-chiave, integrità dell'ontologia.
 
-## Demo (l'entrypoint da guardare)
+## Demo (gli entrypoint da guardare)
+**Tester interattivo** — modelli tu le curve di sforzo e velocità e vedi come reagisce:
 ```bash
 pip install -r requirements.txt
+python tester.py                # chiede prompt, distanza (km), profilo, e le due curve; play 6s/canzone
+```
+Imposti due curve a punti di controllo — **sforzo %** (0-100) e **velocità** (km/h) — su una
+**distanza** che scegli tu; il tempo e il numero di canzoni escono dall'integrazione della
+velocità sulla distanza (piano ⇒ più tempo ⇒ più canzoni). Il tester "gioca" la sessione
+canzone per canzone, mostrando i sensori (lo sforzo % → HRR, classificato dal tuo
+`physiological_state`), il target — i cui **BPM inseguono la velocità che imposti** — e la
+canzone scelta (genere, BPM, Spotify), col passaggio a **RECUPERO** quando il cuore supera la soglia.
+
+**Replay di una sessione pre-registrata** — non interattivo:
+```bash
 python run_demo.py "oggi voglio spingere tantissimo" --session push_then_fatigue
 ```
-`run_demo.py` "riproduce" la sessione a schermo con un cruscotto animato: battito, sforzo,
-il vettore target e la **canzone scelta in tempo reale** (genere, BPM, link Spotify), col
-passaggio a **RECUPERO** quando il cuore supera la soglia. Il flusso dei sensori è un *replay*
-delle finestre di `build_dataset` (non un dispositivo live). Se i modelli SetFit non sono
-presenti, l'NLP usa il fallback a parole-chiave e la demo gira comunque.
+Se i modelli SetFit non sono presenti, entrambi usano il fallback a parole-chiave e girano comunque.
 
 ## Come si esegue (pipeline completa)
 ```bash
