@@ -1,4 +1,4 @@
-"""Genera l'ontologia mood -> generi musicali (ontology/genre_mood.ttl).
+"""Genera l'ontologia OWL mood -> generi musicali (ontology/genre_mood.owl).
 
 Logica (ancorata al dataset, NON inventata): per ognuno dei 5 mood si associano i generi
 del catalogo `songs.csv` guardando la colonna `supports_mood`. Per ogni genere si calcola la
@@ -8,26 +8,26 @@ ogni mood con quota >= SOGLIA, piu' sempre il suo mood dominante (`ar:dominantMo
 Serve alla modalita' QUALITATIVA del recommender: dato il mood dell'utente (dallo stadio NLP),
 l'ontologia restituisce i generi candidati fra cui scegliere le canzoni.
 
-Stesso principio di `build_genre_taxonomy.py` di AlgoRun (affinita' osservata nel dataset,
-non a mano). Fonti teoriche in docs/THEORY.md (Russell 1980; Karageorghis & Terry 2009).
+OWL in sintassi Turtle (owl:Class / owl:ObjectProperty / owl:NamedIndividual), stesso stile di
+`ontology/algorun.owl`. Stesso principio data-grounded di `genreSuitsEffort` in AlgoRun.
+Fonti teoriche in docs/THEORY.md (Russell 1980; Karageorghis & Terry 2009; Rada 1989).
 
 Uso:  python ontology/build_mood_ontology.py [percorso_csv]
 """
 from __future__ import annotations
 
+import csv
 import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-
-import csv
 
 MOODS = ["Neutral", "Focused", "Energetic", "Motivated", "Calm"]
 THRESHOLD = 0.25   # quota minima di supporto perche' un genere "serva" un mood (design -> ablation)
 
 BASE = Path(__file__).parent
 DEFAULT_CSV = BASE.parent / "songs.csv"
-OUT_TTL = BASE / "genre_mood.ttl"
+OUT_OWL = BASE / "genre_mood.owl"
 
 
 def _iri(label: str) -> str:
@@ -35,7 +35,7 @@ def _iri(label: str) -> str:
 
 
 def compute(csv_path: Path) -> dict[str, dict]:
-    """genere -> {dominant, moods:[...]} dai supports_mood osservati."""
+    """genere -> {dominant, moods:[...], shares:{...}} dai supports_mood osservati."""
     g_mood: dict[str, Counter] = defaultdict(Counter)
     with open(csv_path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -58,33 +58,61 @@ def compute(csv_path: Path) -> dict[str, dict]:
     return out
 
 
-def render_ttl(assign: dict[str, dict]) -> str:
-    lines = [
+def render_owl(assign: dict[str, dict]) -> str:
+    L = [
         "# GENERATO da ontology/build_mood_ontology.py — non editare a mano.",
-        "# Associazione mood -> generi ancorata ai supports_mood osservati in songs.csv.",
+        "# Ontologia OWL: associazione mood -> generi ancorata ai supports_mood di songs.csv.",
         "@prefix ar:   <http://runmaxxin.org/ontology#> .",
+        "@prefix owl:  <http://www.w3.org/2002/07/owl#> .",
+        "@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .",
         "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
         "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .",
+        "@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .",
         "",
-        'ar:MoodScheme a skos:ConceptScheme ; rdfs:label "workout mood scheme" .',
-        'ar:GenreScheme a skos:ConceptScheme ; rdfs:label "music genre scheme" .',
+        "<http://runmaxxin.org/ontology> a owl:Ontology ;",
+        '    rdfs:label "RUNMAXXIN Mood-Genre Ontology" ;',
+        '    owl:versionInfo "1.0.0" ;',
+        '    rdfs:comment "Mood -> genere per la modalita\' qualitativa del recommender. '
+        'genreSuitsMood = affinita\' osservata nella colonna supports_mood di songs.csv '
+        "(share >= 0.25 o mood dominante). Fonti: Russell 1980; Karageorghis & Terry 2009; Rada 1989.\" .",
         "",
-        "# --- Mood (vocabolario supports_mood) ---",
+        "#################################################################",
+        "# Classi",
+        "#################################################################",
+        'ar:Mood a owl:Class ; rdfs:label "mood" .',
+        'ar:Genre a owl:Class ; rdfs:label "music genre" .',
+        "ar:Mood owl:disjointWith ar:Genre .",
+        "",
+        "#################################################################",
+        "# Proprieta'",
+        "#################################################################",
+        "ar:genreSuitsMood a owl:ObjectProperty ;",
+        '    rdfs:label "genre suits mood" ; rdfs:domain ar:Genre ; rdfs:range ar:Mood .',
+        "ar:dominantMood a owl:ObjectProperty, owl:FunctionalProperty ;",
+        '    rdfs:label "dominant mood" ; rdfs:subPropertyOf ar:genreSuitsMood ;',
+        "    rdfs:domain ar:Genre ; rdfs:range ar:Mood .",
+        "",
+        "#################################################################",
+        "# Individui: Mood",
+        "#################################################################",
     ]
     for m in MOODS:
-        lines.append(f'ar:{m} a ar:Mood, skos:Concept ; rdfs:label "{m}" ; skos:inScheme ar:MoodScheme .')
-    lines.append("")
-    lines.append("# --- Generi (foglia) con affinita' di mood osservata ---")
+        L.append(f'ar:{m} a owl:NamedIndividual, ar:Mood ; rdfs:label "{m}" .')
+    L += [
+        "",
+        "#################################################################",
+        "# Individui: Genere (affinita' di mood osservata nel dataset)",
+        "#################################################################",
+    ]
     for genre in sorted(assign):
         info = assign[genre]
         suits = " , ".join(f"ar:{m}" for m in info["moods"])
-        lines.append(
-            f'{_iri(genre)} a ar:Genre, skos:Concept ; rdfs:label "{genre}" ; '
-            f'skos:inScheme ar:GenreScheme ; '
+        L.append(
+            f'{_iri(genre)} a owl:NamedIndividual, ar:Genre ; rdfs:label "{genre}" ; '
             f'ar:dominantMood ar:{info["dominant"]} ; '
             f'ar:genreSuitsMood {suits} .'
         )
-    return "\n".join(lines) + "\n"
+    return "\n".join(L) + "\n"
 
 
 def main() -> None:
@@ -92,13 +120,13 @@ def main() -> None:
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV non trovato: {csv_path}")
     assign = compute(csv_path)
-    OUT_TTL.write_text(render_ttl(assign), encoding="utf-8")
+    OUT_OWL.write_text(render_owl(assign), encoding="utf-8")
 
     per_mood = Counter()
     for info in assign.values():
         for m in info["moods"]:
             per_mood[m] += 1
-    print(f"Ontologia scritta in: {OUT_TTL}")
+    print(f"Ontologia OWL scritta in: {OUT_OWL}")
     print(f"Generi: {len(assign)}  (soglia {THRESHOLD})")
     print("Generi per mood:")
     for m in MOODS:

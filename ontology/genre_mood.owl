@@ -1,0 +1,155 @@
+# GENERATO da ontology/build_mood_ontology.py — non editare a mano.
+# Ontologia OWL: associazione mood -> generi ancorata ai supports_mood di songs.csv.
+@prefix ar:   <http://runmaxxin.org/ontology#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://runmaxxin.org/ontology> a owl:Ontology ;
+    rdfs:label "RUNMAXXIN Mood-Genre Ontology" ;
+    owl:versionInfo "1.0.0" ;
+    rdfs:comment "Mood -> genere per la modalita' qualitativa del recommender. genreSuitsMood = affinita' osservata nella colonna supports_mood di songs.csv (share >= 0.25 o mood dominante). Fonti: Russell 1980; Karageorghis & Terry 2009; Rada 1989." .
+
+#################################################################
+# Classi
+#################################################################
+ar:Mood a owl:Class ; rdfs:label "mood" .
+ar:Genre a owl:Class ; rdfs:label "music genre" .
+ar:Mood owl:disjointWith ar:Genre .
+
+#################################################################
+# Proprieta'
+#################################################################
+ar:genreSuitsMood a owl:ObjectProperty ;
+    rdfs:label "genre suits mood" ; rdfs:domain ar:Genre ; rdfs:range ar:Mood .
+ar:dominantMood a owl:ObjectProperty, owl:FunctionalProperty ;
+    rdfs:label "dominant mood" ; rdfs:subPropertyOf ar:genreSuitsMood ;
+    rdfs:domain ar:Genre ; rdfs:range ar:Mood .
+
+#################################################################
+# Individui: Mood
+#################################################################
+ar:Neutral a owl:NamedIndividual, ar:Mood ; rdfs:label "Neutral" .
+ar:Focused a owl:NamedIndividual, ar:Mood ; rdfs:label "Focused" .
+ar:Energetic a owl:NamedIndividual, ar:Mood ; rdfs:label "Energetic" .
+ar:Motivated a owl:NamedIndividual, ar:Mood ; rdfs:label "Motivated" .
+ar:Calm a owl:NamedIndividual, ar:Mood ; rdfs:label "Calm" .
+
+#################################################################
+# Individui: Genere (affinita' di mood osservata nel dataset)
+#################################################################
+ar:g_acoustic a owl:NamedIndividual, ar:Genre ; rdfs:label "acoustic" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_afrobeat a owl:NamedIndividual, ar:Genre ; rdfs:label "afrobeat" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_alt_rock a owl:NamedIndividual, ar:Genre ; rdfs:label "alt-rock" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral .
+ar:g_alternative a owl:NamedIndividual, ar:Genre ; rdfs:label "alternative" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_ambient a owl:NamedIndividual, ar:Genre ; rdfs:label "ambient" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_anime a owl:NamedIndividual, ar:Genre ; rdfs:label "anime" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral .
+ar:g_black_metal a owl:NamedIndividual, ar:Genre ; rdfs:label "black-metal" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_bluegrass a owl:NamedIndividual, ar:Genre ; rdfs:label "bluegrass" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_blues a owl:NamedIndividual, ar:Genre ; rdfs:label "blues" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_brazil a owl:NamedIndividual, ar:Genre ; rdfs:label "brazil" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused .
+ar:g_breakbeat a owl:NamedIndividual, ar:Genre ; rdfs:label "breakbeat" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_british a owl:NamedIndividual, ar:Genre ; rdfs:label "british" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_cantopop a owl:NamedIndividual, ar:Genre ; rdfs:label "cantopop" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_chicago_house a owl:NamedIndividual, ar:Genre ; rdfs:label "chicago-house" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic .
+ar:g_children a owl:NamedIndividual, ar:Genre ; rdfs:label "children" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused .
+ar:g_chill a owl:NamedIndividual, ar:Genre ; rdfs:label "chill" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_classical a owl:NamedIndividual, ar:Genre ; rdfs:label "classical" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_club a owl:NamedIndividual, ar:Genre ; rdfs:label "club" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_comedy a owl:NamedIndividual, ar:Genre ; rdfs:label "comedy" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_country a owl:NamedIndividual, ar:Genre ; rdfs:label "country" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_dance a owl:NamedIndividual, ar:Genre ; rdfs:label "dance" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_dancehall a owl:NamedIndividual, ar:Genre ; rdfs:label "dancehall" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Motivated .
+ar:g_death_metal a owl:NamedIndividual, ar:Genre ; rdfs:label "death-metal" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_deep_house a owl:NamedIndividual, ar:Genre ; rdfs:label "deep-house" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Energetic .
+ar:g_detroit_techno a owl:NamedIndividual, ar:Genre ; rdfs:label "detroit-techno" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Focused , ar:Energetic .
+ar:g_disco a owl:NamedIndividual, ar:Genre ; rdfs:label "disco" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Energetic , ar:Motivated .
+ar:g_disney a owl:NamedIndividual, ar:Genre ; rdfs:label "disney" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_drum_and_bass a owl:NamedIndividual, ar:Genre ; rdfs:label "drum-and-bass" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_dub a owl:NamedIndividual, ar:Genre ; rdfs:label "dub" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused , ar:Energetic .
+ar:g_dubstep a owl:NamedIndividual, ar:Genre ; rdfs:label "dubstep" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Focused , ar:Energetic .
+ar:g_edm a owl:NamedIndividual, ar:Genre ; rdfs:label "edm" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_electro a owl:NamedIndividual, ar:Genre ; rdfs:label "electro" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_electronic a owl:NamedIndividual, ar:Genre ; rdfs:label "electronic" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_emo a owl:NamedIndividual, ar:Genre ; rdfs:label "emo" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_folk a owl:NamedIndividual, ar:Genre ; rdfs:label "folk" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_forro a owl:NamedIndividual, ar:Genre ; rdfs:label "forro" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Energetic , ar:Motivated .
+ar:g_french a owl:NamedIndividual, ar:Genre ; rdfs:label "french" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_funk a owl:NamedIndividual, ar:Genre ; rdfs:label "funk" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused .
+ar:g_garage a owl:NamedIndividual, ar:Genre ; rdfs:label "garage" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_german a owl:NamedIndividual, ar:Genre ; rdfs:label "german" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_gospel a owl:NamedIndividual, ar:Genre ; rdfs:label "gospel" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_goth a owl:NamedIndividual, ar:Genre ; rdfs:label "goth" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_grindcore a owl:NamedIndividual, ar:Genre ; rdfs:label "grindcore" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_groove a owl:NamedIndividual, ar:Genre ; rdfs:label "groove" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_grunge a owl:NamedIndividual, ar:Genre ; rdfs:label "grunge" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_guitar a owl:NamedIndividual, ar:Genre ; rdfs:label "guitar" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_happy a owl:NamedIndividual, ar:Genre ; rdfs:label "happy" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic .
+ar:g_hard_rock a owl:NamedIndividual, ar:Genre ; rdfs:label "hard-rock" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_hardcore a owl:NamedIndividual, ar:Genre ; rdfs:label "hardcore" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral .
+ar:g_hardstyle a owl:NamedIndividual, ar:Genre ; rdfs:label "hardstyle" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic .
+ar:g_heavy_metal a owl:NamedIndividual, ar:Genre ; rdfs:label "heavy-metal" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_hip_hop a owl:NamedIndividual, ar:Genre ; rdfs:label "hip-hop" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_honky_tonk a owl:NamedIndividual, ar:Genre ; rdfs:label "honky-tonk" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Calm .
+ar:g_house a owl:NamedIndividual, ar:Genre ; rdfs:label "house" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic , ar:Motivated .
+ar:g_idm a owl:NamedIndividual, ar:Genre ; rdfs:label "idm" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_indian a owl:NamedIndividual, ar:Genre ; rdfs:label "indian" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_indie a owl:NamedIndividual, ar:Genre ; rdfs:label "indie" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_indie_pop a owl:NamedIndividual, ar:Genre ; rdfs:label "indie-pop" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_industrial a owl:NamedIndividual, ar:Genre ; rdfs:label "industrial" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_iranian a owl:NamedIndividual, ar:Genre ; rdfs:label "iranian" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_j_dance a owl:NamedIndividual, ar:Genre ; rdfs:label "j-dance" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Motivated .
+ar:g_j_idol a owl:NamedIndividual, ar:Genre ; rdfs:label "j-idol" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic , ar:Motivated .
+ar:g_j_pop a owl:NamedIndividual, ar:Genre ; rdfs:label "j-pop" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_j_rock a owl:NamedIndividual, ar:Genre ; rdfs:label "j-rock" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral .
+ar:g_jazz a owl:NamedIndividual, ar:Genre ; rdfs:label "jazz" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Calm .
+ar:g_k_pop a owl:NamedIndividual, ar:Genre ; rdfs:label "k-pop" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_kids a owl:NamedIndividual, ar:Genre ; rdfs:label "kids" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_latin a owl:NamedIndividual, ar:Genre ; rdfs:label "latin" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Motivated .
+ar:g_latino a owl:NamedIndividual, ar:Genre ; rdfs:label "latino" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Neutral , ar:Focused , ar:Motivated .
+ar:g_malay a owl:NamedIndividual, ar:Genre ; rdfs:label "malay" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_mandopop a owl:NamedIndividual, ar:Genre ; rdfs:label "mandopop" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_metal a owl:NamedIndividual, ar:Genre ; rdfs:label "metal" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_metalcore a owl:NamedIndividual, ar:Genre ; rdfs:label "metalcore" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_minimal_techno a owl:NamedIndividual, ar:Genre ; rdfs:label "minimal-techno" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused , ar:Energetic .
+ar:g_mpb a owl:NamedIndividual, ar:Genre ; rdfs:label "mpb" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_new_age a owl:NamedIndividual, ar:Genre ; rdfs:label "new-age" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_opera a owl:NamedIndividual, ar:Genre ; rdfs:label "opera" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Focused , ar:Calm .
+ar:g_pagode a owl:NamedIndividual, ar:Genre ; rdfs:label "pagode" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_party a owl:NamedIndividual, ar:Genre ; rdfs:label "party" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic , ar:Motivated .
+ar:g_piano a owl:NamedIndividual, ar:Genre ; rdfs:label "piano" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_pop a owl:NamedIndividual, ar:Genre ; rdfs:label "pop" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_pop_film a owl:NamedIndividual, ar:Genre ; rdfs:label "pop-film" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_power_pop a owl:NamedIndividual, ar:Genre ; rdfs:label "power-pop" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Neutral , ar:Energetic , ar:Motivated .
+ar:g_progressive_house a owl:NamedIndividual, ar:Genre ; rdfs:label "progressive-house" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_psych_rock a owl:NamedIndividual, ar:Genre ; rdfs:label "psych-rock" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_punk a owl:NamedIndividual, ar:Genre ; rdfs:label "punk" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Energetic .
+ar:g_punk_rock a owl:NamedIndividual, ar:Genre ; rdfs:label "punk-rock" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Neutral , ar:Energetic , ar:Motivated .
+ar:g_r_n_b a owl:NamedIndividual, ar:Genre ; rdfs:label "r-n-b" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused .
+ar:g_reggae a owl:NamedIndividual, ar:Genre ; rdfs:label "reggae" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_reggaeton a owl:NamedIndividual, ar:Genre ; rdfs:label "reggaeton" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Motivated .
+ar:g_rock a owl:NamedIndividual, ar:Genre ; rdfs:label "rock" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_rock_n_roll a owl:NamedIndividual, ar:Genre ; rdfs:label "rock-n-roll" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused .
+ar:g_rockabilly a owl:NamedIndividual, ar:Genre ; rdfs:label "rockabilly" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Motivated .
+ar:g_romance a owl:NamedIndividual, ar:Genre ; rdfs:label "romance" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_sad a owl:NamedIndividual, ar:Genre ; rdfs:label "sad" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_salsa a owl:NamedIndividual, ar:Genre ; rdfs:label "salsa" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_samba a owl:NamedIndividual, ar:Genre ; rdfs:label "samba" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_sertanejo a owl:NamedIndividual, ar:Genre ; rdfs:label "sertanejo" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_show_tunes a owl:NamedIndividual, ar:Genre ; rdfs:label "show-tunes" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_singer_songwriter a owl:NamedIndividual, ar:Genre ; rdfs:label "singer-songwriter" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_ska a owl:NamedIndividual, ar:Genre ; rdfs:label "ska" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Energetic , ar:Motivated .
+ar:g_sleep a owl:NamedIndividual, ar:Genre ; rdfs:label "sleep" ; ar:dominantMood ar:Calm ; ar:genreSuitsMood ar:Neutral , ar:Calm .
+ar:g_soul a owl:NamedIndividual, ar:Genre ; rdfs:label "soul" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Focused .
+ar:g_spanish a owl:NamedIndividual, ar:Genre ; rdfs:label "spanish" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_study a owl:NamedIndividual, ar:Genre ; rdfs:label "study" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_swedish a owl:NamedIndividual, ar:Genre ; rdfs:label "swedish" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_synth_pop a owl:NamedIndividual, ar:Genre ; rdfs:label "synth-pop" ; ar:dominantMood ar:Motivated ; ar:genreSuitsMood ar:Focused , ar:Motivated .
+ar:g_tango a owl:NamedIndividual, ar:Genre ; rdfs:label "tango" ; ar:dominantMood ar:Neutral ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_techno a owl:NamedIndividual, ar:Genre ; rdfs:label "techno" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic .
+ar:g_trance a owl:NamedIndividual, ar:Genre ; rdfs:label "trance" ; ar:dominantMood ar:Energetic ; ar:genreSuitsMood ar:Energetic .
+ar:g_trip_hop a owl:NamedIndividual, ar:Genre ; rdfs:label "trip-hop" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_turkish a owl:NamedIndividual, ar:Genre ; rdfs:label "turkish" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .
+ar:g_world_music a owl:NamedIndividual, ar:Genre ; rdfs:label "world-music" ; ar:dominantMood ar:Focused ; ar:genreSuitsMood ar:Neutral , ar:Focused .

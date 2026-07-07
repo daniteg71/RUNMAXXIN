@@ -47,7 +47,7 @@ pendenza = regressione lineare dei BPM sul tempo
 ```
 - ⚙️ soglia 0.05 bpm/s (~3 bpm) = design.
 
-## Ontologia mood → generi (`ontology/genre_mood.ttl`, `genre_mood.py`)
+## Ontologia mood → generi (OWL: `ontology/genre_mood.owl`, `genre_mood.py`)
 
 ### O1. Associazione mood → generi (per la modalità qualitativa)
 Per ognuno dei 5 mood si associano i generi del catalogo. L'affinità **non è inventata**: per
@@ -60,7 +60,8 @@ genreSuitsMood(genre) = { mood : share ≥ 0.25 } ∪ { argmax_mood share }
 ```
 - ✅ **Russell 1980** (circumplex) e **Karageorghis & Terry 2009** (tempo/energia ↔ arousal):
   giustificano perché il mood orienti la scelta musicale.
-- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti (SKOS `skos:Concept`).
+- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti (OWL: `owl:Class`
+  Mood/Genre, `owl:ObjectProperty` genreSuitsMood/dominantMood, `owl:NamedIndividual`).
 - ⚙️ soglia 0.25 e la multi-appartenenza = scelta di design → ablation. Stesso principio
   data-grounded di `ar:genreSuitsEffort` in AlgoRun (affinità osservata, non a mano).
 

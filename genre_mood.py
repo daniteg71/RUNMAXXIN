@@ -1,17 +1,17 @@
-"""Accessor dell'ontologia mood -> generi (ontology/genre_mood.ttl) per la modalita' QUALITATIVA.
+"""Accessor dell'ontologia OWL mood -> generi (ontology/genre_mood.owl) per la modalita' QUALITATIVA.
 
 Dato il mood dell'utente (dallo stadio NLP, `intent.predict_mood`), restituisce i generi
 candidati fra cui il recommender sceglie le canzoni quando NON c'e' un BPM target 'chirurgico'.
 
-Parsing pure-Python del nostro TTL (formato stabile, una riga per genere) -> nessuna dipendenza
-a runtime. Il file resta comunque RDF/Turtle standard, caricabile con rdflib per il paper.
+Parsing pure-Python del nostro OWL/Turtle (formato stabile, una riga per individuo genere) ->
+nessuna dipendenza a runtime. Il file resta OWL standard, caricabile con rdflib/Protege.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-_TTL = Path(__file__).parent / "ontology" / "genre_mood.ttl"
+_OWL = Path(__file__).parent / "ontology" / "genre_mood.owl"
 
 # es riga: ar:g_happy a ... rdfs:label "happy" ; ... ar:dominantMood ar:Energetic ;
 #          ar:genreSuitsMood ar:Energetic , ar:Neutral .
@@ -28,7 +28,7 @@ def _load() -> dict[str, list[str]]:
     if _GENRE_TO_MOODS is not None:
         return _GENRE_TO_MOODS
     mapping: dict[str, list[str]] = {}
-    for line in _TTL.read_text(encoding="utf-8").splitlines():
+    for line in _OWL.read_text(encoding="utf-8").splitlines():
         if not line.startswith("ar:g_"):
             continue
         lab = _LABEL.search(line)

@@ -12,7 +12,7 @@ from genre_mood import (dominant_genres_for_mood, genres_for_mood,
 
 BASE = Path(__file__).parent
 CSV = BASE / "songs.csv"
-TTL = BASE / "ontology" / "genre_mood.ttl"
+OWL = BASE / "ontology" / "genre_mood.owl"
 
 
 def _csv_genres() -> set[str]:
@@ -20,8 +20,8 @@ def _csv_genres() -> set[str]:
         return {(r.get("genre") or "").strip() for r in csv.DictReader(f) if r.get("genre")}
 
 
-def test_ttl_exists():
-    assert TTL.exists(), "ontology/genre_mood.ttl mancante: esegui build_mood_ontology.py"
+def test_owl_exists():
+    assert OWL.exists(), "ontology/genre_mood.owl mancante: esegui build_mood_ontology.py"
 
 
 def test_every_mood_has_genres():
