@@ -125,7 +125,7 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
         return Target(bpm=float(RECOVERY_BPM), energy=min(params["energy"], 0.30), valence=0.25,
                       weights={"bpm": 0.8, "energy": 0.15, "valence": 0.05},
                       bpm_tolerance=NARROW, genres=[], tau=TAU_EXPLOIT,
-                      mood=mood, goal=goal, effort_band=("LowEffort",),
+                      mood=mood, goal=goal, effort_band=("LowEffort", "TargetEffort"),
                       recovery=True, regime="recovery")
 
     # 2) regime -> bpm base, raggio, tau, generi, pesi
@@ -182,13 +182,16 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
         energy = 0.20 + (energy - 0.20) * f
         regime = "warmup"
 
-    # 6) riempimento + clamp
+    # 6) riempimento + clamp. effort_band coerente col target REALE: nel riscaldamento la
+    # musica è calma, quindi la banda ammessa è bassa (non quella nominale del tipo) -> altrimenti
+    # il gate di sforzo non troverebbe mai canzoni compatibili durante il warm-up.
+    effort_band = ("LowEffort", "TargetEffort") if regime == "warmup" else GOAL_TO_EFFORT[goal]
     valence = VALENCE_BY_MOOD.get(mood, 0.5)
     return Target(bpm=round(_clamp(bpm, 80, 200), 1),
                   energy=round(_clamp(energy, 0.0, 1.0), 3),
                   valence=valence, weights=weights, bpm_tolerance=round(tol, 1),
                   genres=genres, tau=round(tau, 3), mood=mood, goal=goal,
-                  effort_band=GOAL_TO_EFFORT[goal], recovery=False, regime=regime)
+                  effort_band=effort_band, recovery=False, regime=regime)
 
 
 def _demo() -> None:
