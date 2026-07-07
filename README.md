@@ -116,7 +116,18 @@ classificatori SetFit, e li confronta con il baseline a parole-chiave (ablation)
 Test deterministici (non caricano i modelli): regex dei numeri, `bpm_from_speed`, coerenza
 delle etichette col catalogo, override a parole-chiave, integrità dell'ontologia.
 
-## Come si esegue
+## Demo (l'entrypoint da guardare)
+```bash
+pip install -r requirements.txt
+python run_demo.py "oggi voglio spingere tantissimo" --session push_then_fatigue
+```
+`run_demo.py` "riproduce" la sessione a schermo con un cruscotto animato: battito, sforzo,
+il vettore target e la **canzone scelta in tempo reale** (genere, BPM, link Spotify), col
+passaggio a **RECUPERO** quando il cuore supera la soglia. Il flusso dei sensori è un *replay*
+delle finestre di `build_dataset` (non un dispositivo live). Se i modelli SetFit non sono
+presenti, l'NLP usa il fallback a parole-chiave e la demo gira comunque.
+
+## Come si esegue (pipeline completa)
 ```bash
 pip install -r requirements.txt
 python train_intent.py          # genera i modelli SetFit (in models/, gitignorati)
