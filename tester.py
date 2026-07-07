@@ -112,7 +112,7 @@ _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
 
 
 def render(prompt, intent, nlp_real, effort_pts, speed_pts, f, pct, disp_bpm,
-           speed, t_min, state, target, song, gate_hit):
+           speed, t_min, state, target, song, gate_hit, top_df):
     itxt = Text.assemble(
         ("▶ ", "bold"), (prompt, "italic white"),
         (f"    → goal={intent['goal']} mood={intent['mood']}", "white"),
@@ -151,7 +151,18 @@ def render(prompt, intent, nlp_real, effort_pts, speed_pts, f, pct, disp_bpm,
     now.add_row(Text(f"▶ {song.get('spotify_url', '')}", style="dim green"))
     playing = Panel(now, title="♪ ORA IN RIPRODUZIONE", border_style="bright_magenta")
 
-    return Group(header, curve_panel, Columns([sensori, bersaglio], expand=True), playing)
+    top3 = Table(expand=True, border_style="dim")
+    for col in ("#", "canzone", "genere", "bpm", "P%", ""):
+        top3.add_column(col)
+    chosen_id = str(song["song_id"])
+    for rank, (_, r) in enumerate(top_df.head(3).iterrows(), 1):
+        mark = "◀ scelta" if str(r["song_id"]) == chosen_id else ""
+        style = "bold white" if mark else "white"
+        top3.add_row(str(rank), Text(str(r["title"])[:24], style=style), str(r["genre"]),
+                     f"{r['bpm']:.0f}", f"{r['probability_percent']:.1f}", Text(mark, style="green"))
+    candidati = Panel(top3, title="TOP 3 candidati (recommender)", border_style="dim")
+
+    return Group(header, curve_panel, Columns([sensori, bersaglio], expand=True), playing, candidati)
 
 
 def main() -> None:
@@ -189,7 +200,7 @@ def main() -> None:
             played.append(str(song["song_id"]))
             prev_bpm = disp_bpm
             live.update(render(prompt, intent, nlp_real, effort_pts, speed_pts, f, pct,
-                               disp_bpm, speed, t_min, state, target, song, gate_hit))
+                               disp_bpm, speed, t_min, state, target, song, gate_hit, top))
             time.sleep(a.seconds_per_song)
     console.print("\n[bold green]Allenamento finito.[/bold green]")
 
