@@ -12,8 +12,11 @@ Usage:  python tester.py
 from __future__ import annotations
 
 import argparse
+import csv
+import random
 import time
-from collections import Counter
+import zlib
+from collections import Counter, defaultdict
 from statistics import mean
 
 from rich.columns import Columns
@@ -77,12 +80,38 @@ def get_intent(prompt: str):
                  "target_bpm": tb, "params": GOAL_PARAMS[goal]}, False)
 
 
-def choose_song(target, top_df, effort_by_song):
-    for i, (_, song) in enumerate(top_df.iterrows()):
-        efforts = effort_by_song.get(str(song["song_id"]), "").split(";")
-        if is_effort_compatible(efforts, target.effort_band):
-            return song, i > 0
-    return top_df.iloc[0], False
+def load_song_variants(path: str = "songs.csv"):
+    """(title, artist) -> tutti i song_id che sono la STESSA canzone (il catalogo Spotify ha
+    fino a 45 copie della stessa traccia con id diversi). Serve a non riproporre un doppione."""
+    variants: dict = defaultdict(list)
+    with open(path, newline="", encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            variants[(r["title"], r["artist"])].append(str(r["song_id"]))
+    return variants
+
+
+SAMPLE_POOL = 10   # fra quante candidate vicine campionare (varietà, restando vicino al target)
+
+
+def pick_song(rng, target, top_df, effort_by_song):
+    """Deduplica per (titolo, artista) — il catalogo ha doppioni con id diversi — filtra col
+    gate di sforzo, poi CAMPIONA fra le vicine pesando per `probability` (softmax di Sutton &
+    Barto: completa l'esplorazione che il recommender calcola ma non usa). Sessioni diverse ->
+    canzoni diverse; stesso seed -> riproducibile. Ritorna (canzone, esplorato, top-list dedup)."""
+    seen, rows = set(), []
+    for _, r in top_df.iterrows():
+        k = (r["title"], r["artist"])
+        if k in seen:
+            continue
+        seen.add(k)
+        rows.append(r)
+    compat = [r for r in rows if is_effort_compatible(
+        effort_by_song.get(str(r["song_id"]), "").split(";"), target.effort_band)]
+    pool = (compat or rows)[:SAMPLE_POOL]
+    weights = [max(1e-12, float(r["probability"])) for r in pool]
+    chosen = rng.choices(pool, weights=weights, k=1)[0]
+    explored = bool(rows) and str(chosen["song_id"]) != str(rows[0]["song_id"])
+    return chosen, explored, rows
 
 
 _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
@@ -90,7 +119,7 @@ _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
 
 
 def render(prompt, intent, nlp_real, sid, t_min, hrr_hist, spd_hist,
-           state, target, song, gate_hit, top_df):
+           state, target, song, gate_hit, top_rows):
     itxt = Text.assemble(
         ("▶ ", "bold"), (prompt, "italic white"),
         (f"    → goal={intent['goal']} mood={intent['mood']}", "white"),
@@ -121,7 +150,7 @@ def render(prompt, intent, nlp_real, sid, t_min, hrr_hist, spd_hist,
     now.add_row(Text(str(song["title"]), style="bold white"))
     now.add_row(Text.assemble((f"{song['genre']}", "cyan"), ("  ·  ", "dim"),
                               (f"{song['bpm']} bpm", "white"),
-                              ("   [gate ✓ effort corrected]" if gate_hit else "", "yellow")))
+                              ("   [explore]" if gate_hit else "", "yellow")))
     now.add_row(Text(f"▶ {song.get('spotify_url', '')}", style="dim green"))
     playing = Panel(now, title="♪ NOW PLAYING", border_style="bright_magenta")
 
@@ -129,7 +158,7 @@ def render(prompt, intent, nlp_real, sid, t_min, hrr_hist, spd_hist,
     for col in ("#", "song", "genre", "bpm", "P%", ""):
         top3.add_column(col)
     chosen_id = str(song["song_id"])
-    for rank, (_, r) in enumerate(top_df.head(3).iterrows(), 1):
+    for rank, r in enumerate(top_rows[:3], 1):
         mark = "◀ chosen" if str(r["song_id"]) == chosen_id else ""
         top3.add_row(str(rank), Text(str(r["title"])[:24], style="bold white" if mark else "white"),
                      str(r["genre"]), f"{r['bpm']:.0f}", f"{r['probability_percent']:.1f}",
@@ -184,10 +213,12 @@ def main() -> None:
 
     intent, nlp_real = get_intent(prompt)
     effort_by_song = load_effort_by_song()
+    variants = load_song_variants()
     windows = [w for w in load(WINDOWS) if w["session_id"] == sid]
     blocks = group_by_song(windows, a.song_seconds)
 
     console.print(f"\n[dim]{sid} · {len(blocks)} songs · ▶ play…[/dim]")
+    rng = random.Random(zlib.crc32(sid.encode()))    # riproducibile per sessione, vario tra sessioni
     played, last_bpm, hrr_hist, spd_hist, playlist = [], None, [], [], []
     with Live(console=console, refresh_per_second=8, screen=False) as live:
         for block in blocks:
@@ -195,17 +226,18 @@ def main() -> None:
             t_min = int(block[0]["window_start_second"]) / 60.0
             hrr_hist.append(state["mean_hrr"])
             spd_hist.append(state.get("mean_speed_kmh") or 0.0)
+            # candidati extra (top_k alto) perche' i doppioni ne consumano diversi
             target = decide(intent, state, last_bpm, elapsed_min=t_min)
-            top = recommender.recommend(target, top_k=TOP_K, exclude_song_ids=played)
-            song, gate_hit = choose_song(target, top, effort_by_song)
-            played.append(str(song["song_id"]))
+            top = recommender.recommend(target, top_k=TOP_K * 8, exclude_song_ids=played)
+            song, gate_hit, top_rows = pick_song(rng, target, top, effort_by_song)
+            played.extend(variants.get((song["title"], song["artist"]), [str(song["song_id"])]))
             last_bpm = float(song["bpm"])
             playlist.append({"t": t_min, "title": song["title"], "artist": song["artist"],
                              "genre": song["genre"], "bpm": float(song["bpm"]),
                              "regime": "recovery" if target.recovery else target.regime,
                              "effort": state["effort_state"]})
             live.update(render(prompt, intent, nlp_real, sid, t_min, hrr_hist, spd_hist,
-                               state, target, song, gate_hit, top))
+                               state, target, song, gate_hit, top_rows))
             time.sleep(a.seconds_per_song)
 
     console.print("\n[bold green]Workout finished.[/bold green]\n")
