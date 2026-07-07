@@ -12,7 +12,10 @@ Regole teoriche:
     explore (variabilita' musicale; softmax di Sutton & Barto).
   - CONSAPEVOLE DEL TIPO: su IntenseRun/ripetute alterna veloce/lento rispetto alla canzone
     precedente (se l'ultima era veloce, punta piu' lento).
-  - Il cuore comanda: safety override a HRR alta -> vettore di recupero.
+  - Il cuore comanda: safety override a HRR alta -> vettore di recupero. La soglia non
+    e' una costante Python: e' un dato dichiarato nell'ontologia (ontology/runner_state.owl,
+    ar:CriticalState ar:hasThreshold), e la classificazione la fa una query SPARQL
+    (symbolic.is_critical_state) -- non un confronto scritto a mano qui.
 
 Funzione pura, nessun loop, nessun recommender: solo decide() -> Target.
 """
@@ -22,9 +25,9 @@ from dataclasses import asdict, dataclass, field
 
 from intent import GOAL_PARAMS, GOAL_TO_EFFORT
 from genre_mood import genres_for_mood
+from symbolic import is_critical_state
 
 # --- costanti (design -> ablation, vedi docs/THEORY.md) ---
-SAFE_HRR = 0.90          # oltre questa HRR: forza recupero (~limite fisiologico)
 NARROW = 5.0             # raggio bpm stretto (regime quantitativo): +/- 5 bpm
 TAU_EXPLOIT = 0.2        # temperatura bassa = sfrutta (preciso); alta = esplora (varia)
 CALM = 0.7               # fattore "calmati" (dici easy ma sali)
@@ -93,8 +96,10 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
     effort = _get(analysis, "effort_state")
     trend = _get(analysis, "trend_state")
 
-    # 1) SAFETY OVERRIDE: il cuore vince su tutto -> recupero
-    if mean_hrr is not None and mean_hrr >= SAFE_HRR:
+    # 1) SAFETY OVERRIDE: il cuore vince su tutto -> recupero.
+    # La soglia la dichiara l'ontologia, la classificazione la fa una query SPARQL
+    # (symbolic.is_critical_state) -- non un confronto Python scritto a mano.
+    if mean_hrr is not None and is_critical_state(mean_hrr):
         return Target(bpm=float(RECOVERY_BPM), energy=min(params["energy"], 0.30), valence=0.25,
                       weights={"bpm": 0.8, "energy": 0.15, "valence": 0.05},
                       bpm_tolerance=NARROW, genres=[], tau=TAU_EXPLOIT,

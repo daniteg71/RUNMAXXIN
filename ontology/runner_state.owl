@@ -1,0 +1,50 @@
+# T-Box per il safety override — non editare a mano.
+#
+# La soglia di sicurezza VIVE QUI (dato dichiarato nell'ontologia), non come costante
+# Python: prima era `SAFE_HRR = 0.90` in controller.py, ora e' `ar:CriticalState
+# ar:hasThreshold 0.90` in questo file. `symbolic.py` inietta la HRR misurata come
+# tripla e interroga il grafo con una query SPARQL che confronta i due valori — e' la
+# QUERY a decidere se lo stato e' critico, non un confronto scritto a mano in Python.
+# Nessun reasoner DL, nessuna dipendenza Java: solo rdflib.
+#
+# Il resto della logica del controller (regimi, fusione, riscaldamento, variazione, i
+# valori numerici del target) resta INVARIATO in Python: e' calcolo continuo, non
+# classificazione simbolica, e OWL/SWRL non sono adatti a quello.
+#
+# NB: soglia indipendente dalle zone di sforzo di physiological_state.py (Low/Target/
+# High/VeryHigh, soglie 0.40/0.70/0.85, file base NON toccato): quella classifica lo
+# sforzo, questa classifica lo STATO DI SICUREZZA per il safety override.
+@prefix ar:   <http://runmaxxin.org/ontology#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://runmaxxin.org/ontology/runner_state> a owl:Ontology ;
+    rdfs:label "RUNMAXXIN Runner Safety State" ;
+    owl:versionInfo "1.1.0" ;
+    rdfs:comment "Stato di sicurezza del runner (Critical/Normal). La soglia e' dato ontologico (non costante Python); symbolic.py la interroga via SPARQL, confrontandola con la HRR osservata. Soglia 0.90 = design, ancorata al limite fisiologico (vedi docs/THEORY.md)." .
+
+#################################################################
+# Classi
+#################################################################
+ar:RunnerState a owl:Class ; rdfs:label "runner safety state" .
+
+ar:CriticalState a owl:Class ;
+    rdfs:subClassOf ar:RunnerState ;
+    rdfs:label "critical state (safety override)" ;
+    ar:hasThreshold "0.90"^^xsd:float .
+
+ar:NormalState a owl:Class ;
+    rdfs:subClassOf ar:RunnerState ;
+    rdfs:label "normal state" .
+
+#################################################################
+# Proprietà
+#################################################################
+ar:hasThreshold a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "hrr threshold (dato ontologico, non hardcoded in Python)" ;
+    rdfs:domain owl:Class ; rdfs:range xsd:float .
+
+ar:hasCurrentHRR a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "current heart rate reserve (osservazione iniettata da Python)" ;
+    rdfs:domain ar:RunnerState ; rdfs:range xsd:float .

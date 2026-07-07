@@ -59,8 +59,8 @@ l'ontologia; non definisce le regole (T-Box). `build_mood_ontology.py` rigenera 
 `decide(intent, analysis, last_bpm, elapsed_min)` produce un `Target` = vettore
 `[bpm, energy, valence]` + `weights`, `bpm_tolerance`, `genres`, `tau`, `effort_band`, `recovery`.
 Logica, in ordine di priorità:
-1. **Safety**: se `mean_hrr ≥ 0.90`, forza un vettore di recupero (BPM basso, energia bassa) —
-   vince su tutto.
+1. **Safety**: se lo stato è `CriticalState` (vedi sotto), forza un vettore di recupero
+   (BPM basso, energia bassa) — vince su tutto.
 2. **Regime**: quantitativo → BPM preciso, raggio stretto, `tau` basso; qualitativo → banda,
    raggio largo, generi del mood, `tau` più alto (più varietà).
 3. **Fusione sensori**: aggiusta energia/BPM in base allo sforzo misurato (es. "dici easy ma
@@ -68,6 +68,20 @@ Logica, in ordine di priorità:
 4. **Riscaldamento**: nei primi 5 minuti il target sale gradualmente da ~120 BPM al valore previsto.
 5. **Variazione**: su IntenseRun alterna veloce/lento rispetto alla canzone precedente.
 Il contratto completo del `Target` è in `docs/TARGET_CONTRACT.md`.
+
+### Strato simbolico (`symbolic.py`, `ontology/runner_state.owl`, `ontology/nlp_shapes.ttl`)
+Due responsabilità reali dell'ontologia (non un lookup, non un `if` in Python):
+- **`is_critical_state(mean_hrr)`**: la soglia di sicurezza (0.90) è un **dato dichiarato
+  nell'ontologia** (`ar:CriticalState ar:hasThreshold`), non una costante Python. Si inietta la
+  HRR osservata come tripla RDF e una **query SPARQL** (via `rdflib`) confronta i due valori
+  dentro il grafo — è la query a classificare lo stato, non un confronto scritto a mano. Nessun
+  reasoner DL/Java: solo `rdflib`, deterministico.
+- **`validate_speed(speed_kmh)`**: una **SHACL shape** (`pyshacl`) valida i numeri estratti
+  dall'NLP contro un vincolo fisiologico (0–45 km/h) — pattern "Constraint Gate": l'ontologia
+  non genera dati, li restringe e valida. Una velocità assurda ("300 km/h") viene scartata
+  esplicitamente invece di essere silenziosamente clampata più a valle.
+Il resto della logica del controller (riscaldamento, fusione, variazione, clamp) resta calcolo
+numerico in Python: OWL/SWRL non sono adatti al calcolo continuo, solo alla classificazione.
 
 ### Loop di sessione (`session.py`)
 Concatena gli stadi: calcola l'intento una volta, poi legge le finestre da 30s di

@@ -90,11 +90,27 @@ Nei primi `WARMUP_MIN` (=5) minuti il target sale linearmente da una banda bassa
 energia 0.20) fino al target previsto dell'allenamento: si parte piano e si accelera prima di
 entrare nel lavoro. ⚙️ durata e rampa = design → ablation (buona pratica di allenamento).
 
-### C3. Safety override e variazione per tipo
-- `mean_hrr ≥ 0.90` → vettore di **recupero** (bpm → banda facile, energy ≤ 0.30): il cuore
-  vince sull'intento. ⚙️ soglia 0.90 ancorata al limite fisiologico (design → ablation).
-- IntenseRun/ripetute: alterna veloce/lento rispetto alla canzone precedente (`last_bpm`) →
-  variabilità di ritmo tipica del lavoro a intervalli. ⚙️ design.
+### C3. Safety override — strato simbolico (`symbolic.py`, `ontology/runner_state.owl`)
+`mean_hrr ≥ soglia` → vettore di **recupero** (bpm → banda facile, energy ≤ 0.30): il cuore
+vince sull'intento. La soglia (0.90) NON è una costante Python: è un **dato dichiarato
+nell'ontologia** (`ar:CriticalState ar:hasThreshold 0.90`); `symbolic.is_critical_state()`
+inietta la HRR osservata come tripla RDF e una **query SPARQL** confronta i due valori dentro
+il grafo — è la query a classificare lo stato, non un `if` scritto a mano in `controller.py`.
+Nessun reasoner DL (niente dipendenza Java): solo `rdflib`, deterministico e verificabile.
+⚙️ soglia 0.90 ancorata al limite fisiologico (design → ablation).
+
+### C4. Constraint Gate SHACL sull'NLP (`symbolic.validate_speed`, `ontology/nlp_shapes.ttl`)
+Un numero estratto dal testo può essere fisiologicamente assurdo (refuso, allucinazione:
+"corro a 300 km/h"). Invece di un controllo Python, una **SHACL shape** dichiara il vincolo
+di dominio (`0 < speed_kmh ≤ 45`, oltre il record mondiale di sprint) e `pyshacl` lo valida:
+se violato, il valore viene **scartato esplicitamente** invece di essere silenziosamente
+clampato più a valle da `bpm_from_speed`. Pattern identico al "Constraint Gate" (domain/range)
+discusso a lezione: l'ontologia non genera dati, li **restringe e valida**.
+
+### C5. Variazione per tipo
+IntenseRun/ripetute: alterna veloce/lento rispetto alla canzone precedente (`last_bpm`) →
+variabilità di ritmo tipica del lavoro a intervalli. ⚙️ design, resta calcolo numerico in Python
+(non simbolico): interpolazioni e clamp non sono adatti a OWL/SWRL.
 
 ## Stadio 3 — Recommender (`recommender.py`)
 Riceve il `Target`, calcola la **distanza euclidea pesata** target↔canzone e assegna una

@@ -1,0 +1,18 @@
+# Constraint Gate (SHACL) sui numeri estratti dall'NLP — non editare a mano.
+# L'NLP a volte "allucina" o riceve numeri assurdi (es. "corro a 300 km/h"): invece di
+# controllarli con un if in Python, si dichiara qui il vincolo di dominio e lo si valida
+# con un motore SHACL (pyshacl). Se il valore viola il vincolo, viene scartato (fallback:
+# si comporta come se il numero non fosse stato dichiarato -> regime qualitativo).
+@prefix ar:   <http://runmaxxin.org/ontology#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+ar:ExtractedSpeedShape a sh:NodeShape ;
+    sh:targetClass ar:ExtractedSpeed ;
+    sh:property [
+        sh:path ar:speedKmh ;
+        sh:datatype xsd:float ;
+        sh:minExclusive 0 ;
+        sh:maxInclusive 45.0 ;   # oltre il record mondiale di sprint (~37 km/h) con margine
+        sh:message "Velocità dichiarata fuori dal range fisiologicamente plausibile (0, 45] km/h." ;
+    ] .

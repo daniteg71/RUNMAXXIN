@@ -101,13 +101,23 @@ def predict_mood(text: str) -> str:
 
 
 def parse_numbers(text: str) -> dict:
-    """Estrae i valori quantitativi dalla frase (invariato da AlgoRun)."""
+    """Estrae i valori quantitativi dalla frase (invariato da AlgoRun).
+
+    La velocità estratta passa dal Constraint Gate SHACL (symbolic.validate_speed,
+    ontology/nlp_shapes.ttl): un numero fisiologicamente assurdo (es. "300 km/h",
+    allucinazione o refuso) viene SCARTATO qui, esplicitamente, invece di essere
+    silenziosamente clampato più avanti da bpm_from_speed.
+    """
+    from symbolic import validate_speed
+
     n: dict = {}
     if (m := _SPEED.search(text)):
         n["speed_kmh"] = float(m.group(1).replace(",", "."))
     elif (m := _PACE.search(text)):
         pace = int(m.group(1)) + int(m.group(2)) / 60
         n["speed_kmh"] = round(60 / pace, 1) if pace else None
+    if n.get("speed_kmh") is not None and not validate_speed(n["speed_kmh"]):
+        del n["speed_kmh"]                              # fuori dal Constraint Gate -> scartata
     if (m := _DIST.search(text)):
         n["distance_km"] = float(m.group(1).replace(",", "."))
     if (m := _DUR.search(text)):
