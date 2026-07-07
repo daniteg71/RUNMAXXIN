@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from intent import GOAL_PARAMS, GOAL_TO_EFFORT
+from intent import GOAL_PARAMS, GOAL_TO_EFFORT, bpm_from_speed
 from genre_mood import genres_for_mood
 from symbolic import is_critical_state
 
@@ -34,6 +34,8 @@ CALM = 0.7               # fattore "calmati" (dici easy ma sali)
 PUSH = 1.2               # fattore "spingi"  (dici intense ma vai piano)
 RECOVERY_BPM = GOAL_PARAMS["EasyRun"]["bpm"][0]   # in recupero scendi sempre a ~banda facile
 WARMUP_MIN = 5.0         # riscaldamento: i primi minuti parti basso e sali fino al target
+ENTRAIN_MIN, ENTRAIN_MAX = 150.0, 190.0   # banda naturale di cadenza (Van Dyck): il target la insegue
+VAR_DELTA = 8.0          # ampiezza dell'alternanza veloce/lento sulle ripetute (attorno al bpm live)
 
 # mood -> valenza target (Russell 1980; arousal/positivita' della musica)
 VALENCE_BY_MOOD = {"Energetic": 0.75, "Motivated": 0.70, "Focused": 0.45,
@@ -77,6 +79,26 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+def live_entrainment_bpm(analysis) -> float | None:
+    """BPM che INSEGUE la corsa reale, di momento in momento (entrainment di Van Dyck, continuo).
+
+    UNICO punto di verità per "la musica segue la velocità": preferisce la **cadenza misurata**
+    (1:1 coi passi, la cosa che il beat deve inseguire); in mancanza la stima dalla **velocità**
+    con `bpm_from_speed` (134 + 2.9·v). Ritorna None se non c'è segnale (cold start) -> il
+    chiamante ripiega sul centro-banda del tipo.
+
+    Chiunque voglia "far seguire il bpm alla velocità" chiama QUESTA — così la logica non è
+    duplicata: cambiarla qui la cambia ovunque (controller, tester, loop).
+    """
+    cadence = _get(analysis, "mean_cadence_spm")
+    if cadence is not None and float(cadence) > 0:
+        return _clamp(float(cadence), ENTRAIN_MIN, ENTRAIN_MAX)     # cadenza misurata, 1:1
+    speed = _get(analysis, "mean_speed_kmh")
+    if speed is not None and float(speed) > 0:
+        return float(bpm_from_speed(float(speed)))                 # stima dalla velocità (Van Dyck)
+    return None
+
+
 def decide(intent: dict, analysis=None, last_bpm: float | None = None,
            elapsed_min: float | None = None) -> Target:
     """Frase (intent) + stato sensori (analysis) -> vettore Target per il recommender.
@@ -114,7 +136,11 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
         genres: list = []
         weights = {"bpm": 0.8, "energy": 0.15, "valence": 0.05}
     else:
-        bpm = (lo + hi) / 2
+        # QUALITATIVO: il BPM INSEGUE la velocità reale del momento (entrainment continuo).
+        # Prima era il centro-banda fisso del tipo; ora segue quanto stai andando davvero
+        # (cadenza/velocità dai sensori). Se non c'è ancora segnale (cold start) ripiega sulla banda.
+        live = live_entrainment_bpm(analysis)
+        bpm = live if live is not None else (lo + hi) / 2
         tol = (hi - lo) / 2
         tau = params["tau"]
         genres = genres_for_mood(mood)
@@ -141,10 +167,11 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
         if trend == "Increasing" and effort in ("HighEffort", "VeryHighEffort"):
             energy = min(energy, params["energy"])
 
-    # 4) variazione per tipo (ripetute, solo qualitativo): alterna veloce/lento
+    # 4) variazione per tipo (ripetute, solo qualitativo): alterna veloce/lento ATTORNO al
+    # bpm live (non piu' agli estremi fissi della banda), cosi' continua a seguire la velocita'.
     if goal == "IntenseRun" and last_bpm is not None and not quantitative:
-        mid = (lo + hi) / 2
-        bpm = lo + (hi - lo) * 0.25 if last_bpm >= mid else lo + (hi - lo) * 0.75
+        bpm = bpm - VAR_DELTA if last_bpm >= bpm else bpm + VAR_DELTA
+        bpm = _clamp(bpm, ENTRAIN_MIN, ENTRAIN_MAX)          # resta nella cadenza naturale (Van Dyck)
         tol = NARROW                                         # punta preciso l'estremo scelto
 
     # 5) riscaldamento: nei primi minuti parti basso e sali fino al target previsto
@@ -186,6 +213,12 @@ def _demo() -> None:
     show("IntenseRun qualitativo, ultima canzone veloce (varia -> lento)",
          decide(ql, analysis={"mean_hrr": 0.7, "effort_state": "TargetEffort", "trend_state": "Stable"}, last_bpm=182))
     show("SAFETY: HRR 0.95 -> recupero", decide(q, analysis={"mean_hrr": 0.95, "effort_state": "VeryHighEffort", "trend_state": "Increasing"}))
+
+    print("\n== QUALITATIVO CHE INSEGUE LA VELOCITA' (piano -> spinge come un cavallo) ==")
+    for v in (9, 11, 14, 17):
+        t = decide(ql, analysis={"mean_hrr": 0.6, "effort_state": "TargetEffort",
+                                 "trend_state": "Stable", "mean_speed_kmh": v})
+        print(f"  velocità={v:>2} km/h  ->  bpm target={t.bpm}")
 
     print("\n== RISCALDAMENTO (quantitativo, elapsed 0->6 min): parti basso e sali ==")
     for e in (0, 1, 2, 3, 5, 6):

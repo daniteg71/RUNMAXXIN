@@ -67,10 +67,17 @@ def group_by_song(windows: list[dict], song_seconds: int) -> list[list[dict]]:
 
 
 def aggregate(block: list[dict]) -> dict:
-    """Le finestre del blocco -> uno stato sensori per la canzone (media HRR, effort/trend dominanti)."""
+    """Le finestre del blocco -> uno stato sensori per la canzone (media HRR, effort/trend
+    dominanti, e velocità/cadenza medie: servono al controller per far seguire i BPM alla
+    velocità reale — live_entrainment_bpm)."""
+    def avg(col):
+        vals = [float(w[col]) for w in block if w.get(col) not in (None, "")]
+        return mean(vals) if vals else None
     return {"mean_hrr": mean(float(w["mean_hrr"]) for w in block),
             "effort_state": Counter(w["effort_state"] for w in block).most_common(1)[0][0],
-            "trend_state": Counter(w["trend_state"] for w in block).most_common(1)[0][0]}
+            "trend_state": Counter(w["trend_state"] for w in block).most_common(1)[0][0],
+            "mean_speed_kmh": avg("mean_speed_kmh"),
+            "mean_cadence_spm": avg("mean_cadence_spm")}
 
 
 def run(prompt: str, windows: list[dict], song_seconds: int) -> None:
