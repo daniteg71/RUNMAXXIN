@@ -115,7 +115,7 @@ _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
 
 
 def render(prompt, intent, nlp_real, sid, scale, t_min, hrr_hist, spd_hist,
-           state, target, song, explored, top_rows):
+           state, target, song):
     itxt = Text.assemble(
         ("▶ ", "bold"), (prompt, "italic white"),
         (f"    → goal={intent['goal']} mood={intent['mood']}", "white"),
@@ -143,25 +143,13 @@ def render(prompt, intent, nlp_real, sid, scale, t_min, hrr_hist, spd_hist,
     target_panel = Panel(tgt, title="TARGET (BPM follows speed)", border_style="green")
 
     now = Table.grid(padding=(0, 1))
-    now.add_row(Text(str(song["title"]), style="bold white"))
+    now.add_row(Text(str(song["title"]) + "  —  " + str(song["artist"]), style="bold white"))
     now.add_row(Text.assemble((f"{song['genre']}", "cyan"), ("  ·  ", "dim"),
-                              (f"{song['bpm']} bpm", "white"),
-                              ("   [explore]" if explored else "", "yellow")))
+                              (f"{song['bpm']} bpm", "white")))
     now.add_row(Text(f"▶ {song.get('spotify_url', '')}", style="dim green"))
     playing = Panel(now, title="♪ NOW PLAYING", border_style="bright_magenta")
 
-    top3 = Table(expand=True, border_style="dim")
-    for col in ("#", "song", "genre", "bpm", "P%", ""):
-        top3.add_column(col)
-    chosen_id = str(song["song_id"])
-    for rank, r in enumerate(top_rows[:3], 1):
-        mark = "◀ chosen" if str(r["song_id"]) == chosen_id else ""
-        top3.add_row(str(rank), Text(str(r["title"])[:24], style="bold white" if mark else "white"),
-                     str(r["genre"]), f"{r['bpm']:.0f}", f"{r['probability_percent']:.1f}",
-                     Text(mark, style="green"))
-    candidates = Panel(top3, title="TOP 3 candidates (recommender)", border_style="dim")
-
-    return Group(header, trend_panel, Columns([sensors, target_panel], expand=True), playing, candidates)
+    return Group(header, trend_panel, Columns([sensors, target_panel], expand=True), playing)
 
 
 def print_summary(sid, scale, prompt, intent, playlist, hrr_hist, spd_hist):
@@ -218,7 +206,7 @@ def main() -> None:
             spd_hist.append(state["mean_speed_kmh"])
             target = decide(intent, state, last_bpm, elapsed_min=state["t_min"])
             top = recommender.recommend(target, top_k=TOP_K * 8, exclude_song_ids=played)
-            song, explored, top_rows = pick_song(rng, target, top, effort_by_song)
+            song, _explored, _rows = pick_song(rng, target, top, effort_by_song)
             played.extend(variants.get((song["title"], song["artist"]), [str(song["song_id"])]))
             last_bpm = float(song["bpm"])
             playlist.append({"t": state["t_min"], "title": song["title"], "artist": song["artist"],
@@ -226,7 +214,7 @@ def main() -> None:
                              "regime": "recovery" if target.recovery else target.regime,
                              "effort": state["effort_state"]})
             live.update(render(prompt, intent, nlp_real, sid, scale, state["t_min"], hrr_hist,
-                               spd_hist, state, target, song, explored, top_rows))
+                               spd_hist, state, target, song))
             time.sleep(a.seconds_per_song)
 
     console.print("\n[bold green]Workout finished.[/bold green]\n")
