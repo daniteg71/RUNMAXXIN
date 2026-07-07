@@ -82,33 +82,40 @@ def get_intent(prompt: str):
                  "target_bpm": tb, "params": GOAL_PARAMS[goal]}, False)
 
 
-def session_length_sec(numbers: dict, fn, rng) -> tuple[int, str]:
-    """Quanto dura la sessione: dai numeri del prompt, o random. Ritorna (secondi, etichetta)."""
+def archetype_avg_speed(fn) -> float:
+    """Velocità media della FORMA dell'archetipo (indipendente dalla durata: le fn usano s/durata)."""
+    return mean(fn(int(k / 40 * 1000), 1000)[1] for k in range(1, 41))
+
+
+def session_length_sec(numbers: dict, avg_spd: float, rng) -> tuple[int, str]:
+    """Quanto dura la sessione: dai numeri del prompt (durata, o distanza/velocità), o random."""
     if numbers.get("duration_min"):
         return int(numbers["duration_min"] * 60), f"duration {numbers['duration_min']} min"
     if numbers.get("distance_km"):
-        avg_spd = mean(fn(int(k / 40 * 1000), 1000)[1] for k in range(1, 41))   # forma normalizzata
         return int(numbers["distance_km"] / max(1.0, avg_spd) * 3600), f"distance {numbers['distance_km']} km"
     mins = rng.randint(18, 42)
     return mins * 60, f"random {mins} min"
 
 
-def generate_session(fn, resting, maxhr, total_sec, song_sec, rng) -> list[dict]:
-    """Genera i dati sensore per canzone: forma dall'archetipo `fn` + rumore stocastico; lo
-    sforzo/HRR/trend li calcola il file base physiological_state.py."""
-    n = max(1, round(total_sec / song_sec))
-    states, prev_bpm = [], None
-    for i in range(n):
-        center = i * song_sec + song_sec / 2
+def generate_session(fn, resting, maxhr, total_sec, speed_scale, rng) -> list[dict]:
+    """Genera i dati sensore per canzone: la FORMA dall'archetipo `fn`, il LIVELLO di velocità
+    da `speed_scale` (dalla velocità dichiarata nel prompt, o 1.0), + rumore stocastico. La durata
+    di ogni canzone è variabile (2.5-4 min: le canzoni vere non durano tutte uguale). Sforzo/HRR/
+    trend li calcola il file base physiological_state.py."""
+    states, prev_bpm, t = [], None, 0.0
+    while t < total_sec and len(states) < 60:
+        seg = rng.uniform(150, 240)                          # durata canzone 2.5-4 min
+        center = min(t + seg / 2, float(total_sec))
         bpm, speed, _phase = fn(int(center), total_sec)
         bpm = max(60.0, bpm + rng.gauss(0, 2.0))
-        speed = max(1.0, speed + rng.gauss(0, 0.35))
+        speed = max(1.0, speed * speed_scale + rng.gauss(0, 0.35))   # forma x livello dichiarato
         hrr = compute_hrr(bpm, resting, maxhr)
-        slope = 0.0 if prev_bpm is None else (bpm - prev_bpm) / song_sec
+        slope = 0.0 if prev_bpm is None else (bpm - prev_bpm) / seg
         prev_bpm = bpm
-        states.append({"t_min": i * song_sec / 60.0, "mean_hrr": hrr,
+        states.append({"t_min": t / 60.0, "mean_hrr": hrr,
                        "effort_state": classify_effort(hrr), "trend_state": classify_trend(slope),
                        "mean_speed_kmh": speed})
+        t += seg
     return states
 
 
@@ -179,7 +186,6 @@ def print_summary(sid, scale, prompt, intent, playlist, hrr_hist, spd_hist):
 def main() -> None:
     ap = argparse.ArgumentParser(description="RUNMAXXIN tester (prompt x performance, generated).")
     ap.add_argument("--seconds-per-song", type=float, default=6.0)
-    ap.add_argument("--song-seconds", type=int, default=180, help="seconds of running per song")
     ap.add_argument("--seed", type=int, default=None, help="reproduce a run (default: random)")
     a = ap.parse_args()
 
@@ -196,8 +202,12 @@ def main() -> None:
     # regime QUANTITATIVO se il prompt dichiara un passo (es. "12 km/h", "5:00 min/km"): la
     # musica tiene il BPM voluto; QUALITATIVO se non c'è un numero -> insegue la velocità generata.
     rng = random.Random(a.seed)                       # None = casuale ogni volta; --seed = riproducibile
-    total_sec, scale = session_length_sec(intent["numbers"], fn, rng)
-    states = generate_session(fn, resting, maxhr, total_sec, a.song_seconds, rng)
+    base_avg = archetype_avg_speed(fn)
+    declared = intent["numbers"].get("speed_kmh")
+    speed_scale = (declared / base_avg) if declared else 1.0      # il passo dichiarato fissa il LIVELLO
+    eff_avg = declared if declared else base_avg
+    total_sec, scale = session_length_sec(intent["numbers"], eff_avg, rng)
+    states = generate_session(fn, resting, maxhr, total_sec, speed_scale, rng)
 
     effort_by_song = load_effort_by_song()
     variants = load_song_variants()
