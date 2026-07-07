@@ -117,19 +117,25 @@ Test deterministici (non caricano i modelli): regex dei numeri, `bpm_from_speed`
 delle etichette col catalogo, override a parole-chiave, integrità dell'ontologia.
 
 ## Demo (gli entrypoint da guardare)
-**Tester** — abbini un prompt a un profilo di corsa e vedi come reagisce:
+**Tester** — abbini un prompt a una prestazione e la sessione viene **generata al volo**:
 ```bash
 pip install -r requirements.txt
-python tester.py                # chiede il prompt, poi scegli una prestazione; play 6s/canzone
+python tester.py                # prompt + scegli una prestazione; play 6s/canzone
+python tester.py --seed 42      # riproduci una run specifica (default: casuale ogni volta)
 ```
-Scegli una **frase** e uno dei **6 archetipi di prestazione** (`steady`, `push_fatigue`,
-`negative_split`, `intervals`, `easy_recovery`, `beginner_struggle` — durate e affaticamenti
-diversi, generati da `simulate_sessions.py`). Il tester "gioca" la sessione canzone per canzone,
-mostrando l'andamento (cuore + velocità), i sensori (dal tuo `physiological_state`), il target —
-i cui **BPM inseguono la velocità reale** — la canzone scelta e le **Top-3 candidate** (genere,
-BPM), col passaggio a **RECUPERO** quando il cuore supera la soglia. Stesso profilo con prompt
-diversi (o viceversa) = la **matrice prompt × prestazione**. Una corsa vera esportata da uno
-smartwatch è semplicemente un altro dataset nello stesso formato.
+Il test = **(quello che dici) × (come si comporta il corpo) × caso**:
+- il **prompt** dà l'intento (goal/mood) **e la scala**: se dichiara una **distanza** ("20 km")
+  o una **durata** ("40 min") la sessione dura quello; se non c'è nessun numero, la durata è **random**;
+- l'**archetipo** dà la *forma* del comportamento (`steady`, `push_fatigue`, `negative_split`,
+  `intervals`, `easy_recovery`, `beginner_struggle`) — non valori fissi;
+- i valori di battito/velocità sono **generati con rumore** attorno alla forma (stocastici),
+  quindi ogni run è diversa (`--seed` per riprodurne una).
+
+I BPM/velocità generati passano dal tuo `physiological_state.py` (HRR → sforzo/trend), poi
+controller e recommender. Il tester mostra l'andamento (cuore+velocità), i sensori, il target —
+i cui **BPM inseguono la velocità** — la canzone scelta e le **Top-3** (genere, BPM), con
+**RECOVERY** quando il cuore supera la soglia, e a fine corsa un **riepilogo** + la **playlist**
+completa. (`simulate_sessions.py` + `session.py` restano per il replay di una sessione fissa.)
 
 **Replay di una sessione pre-registrata** — non interattivo:
 ```bash
