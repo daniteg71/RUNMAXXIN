@@ -1,5 +1,5 @@
-# GENERATO da ontology/build_mood_ontology.py — non editare a mano.
-# Ontologia OWL: associazione mood -> generi ancorata ai supports_mood di songs.csv.
+# Strato simbolico generato da ontology/build_mood_ontology.py — non editare a mano.
+# Ontologia OWL mood -> generi; affinita' popolate empiricamente (ontology population).
 @prefix ar:   <http://runmaxxin.org/ontology#> .
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -10,7 +10,7 @@
 <http://runmaxxin.org/ontology> a owl:Ontology ;
     rdfs:label "RUNMAXXIN Mood-Genre Ontology" ;
     owl:versionInfo "1.0.0" ;
-    rdfs:comment "Mood -> genere per la modalita' qualitativa del recommender. genreSuitsMood = affinita' osservata nella colonna supports_mood di songs.csv (share >= 0.25 o mood dominante). Fonti: Russell 1980; Karageorghis & Terry 2009; Rada 1989." .
+    rdfs:comment "Ontologia mood -> genere: strato simbolico per la modalita' qualitativa del recommender. Affinita' genreSuitsMood popolate empiricamente (soglia sull'evidenza + mood dominante). Fonti: Russell 1980; Karageorghis & Terry 2009; Rada 1989." .
 
 #################################################################
 # Classi

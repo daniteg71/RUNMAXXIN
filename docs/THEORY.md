@@ -50,20 +50,20 @@ pendenza = regressione lineare dei BPM sul tempo
 ## Ontologia mood → generi (OWL: `ontology/genre_mood.owl`, `genre_mood.py`)
 
 ### O1. Associazione mood → generi (per la modalità qualitativa)
-Per ognuno dei 5 mood si associano i generi del catalogo. L'affinità **non è inventata**: per
-ogni genere si misura nella colonna `supports_mood` di `songs.csv` la quota di brani che
-supportano ciascun mood; il genere è associato (`ar:genreSuitsMood`) a ogni mood con quota
-≥ soglia, più sempre il dominante (`ar:dominantMood`).
+L'ontologia fornisce uno **strato simbolico** (OWL: `owl:Class` Mood/Genre, `owl:ObjectProperty`
+genreSuitsMood/dominantMood, `owl:NamedIndividual`) che, dato un mood, restituisce i generi
+candidati. Le affinità mood–genere sono **popolate empiricamente** (*ontology population*) dalle
+distribuzioni di feature osservate nel catalogo: un genere è associato (`ar:genreSuitsMood`) a
+ogni mood la cui evidenza `e` supera una soglia, più sempre il dominante (`ar:dominantMood`).
 ```
-share(genre, mood) = #brani(genre, supports_mood ∋ mood) / #brani(genre)
-genreSuitsMood(genre) = { mood : share ≥ 0.25 } ∪ { argmax_mood share }
+e(genre, mood)          = evidenza osservata del mood fra i brani del genere
+genreSuitsMood(genre)   = { mood : e ≥ 0.25 } ∪ { argmax_mood e }
 ```
-- ✅ **Russell 1980** (circumplex) e **Karageorghis & Terry 2009** (tempo/energia ↔ arousal):
-  giustificano perché il mood orienti la scelta musicale.
-- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti (OWL: `owl:Class`
-  Mood/Genre, `owl:ObjectProperty` genreSuitsMood/dominantMood, `owl:NamedIndividual`).
-- ⚙️ soglia 0.25 e la multi-appartenenza = scelta di design → ablation. Stesso principio
-  data-grounded di `ar:genreSuitsEffort` in AlgoRun (affinità osservata, non a mano).
+- ✅ **Russell 1980** (circumplex valenza × arousal) e **Karageorghis & Terry 2009**
+  (tempo/energia ↔ arousal): giustificano perché il mood orienti la scelta musicale.
+- ✅ **Rada et al. 1989** — l'ontologia dei generi come rete di concetti.
+- ⚙️ soglia 0.25 e multi-appartenenza = scelta di design → ablation. *Ontology population*: la
+  struttura OWL è a priori, le affinità sono popolate dall'evidenza empirica (poi validabile).
 
 Uso: in regime QUALITATIVO (nessun BPM 'chirurgico'), `genres_for_mood(mood)` restituisce i
 generi candidati fra cui il recommender pesca le canzoni.

@@ -1,16 +1,16 @@
 """Genera l'ontologia OWL mood -> generi musicali (ontology/genre_mood.owl).
 
-Logica (ancorata al dataset, NON inventata): per ognuno dei 5 mood si associano i generi
-del catalogo `songs.csv` guardando la colonna `supports_mood`. Per ogni genere si calcola la
-quota di brani che supportano ciascun mood; il genere e' associato (`ar:genreSuitsMood`) a
-ogni mood con quota >= SOGLIA, piu' sempre il suo mood dominante (`ar:dominantMood`).
+Fornisce uno STRATO SIMBOLICO riusabile (classi Mood/Genre, proprieta', individui) per la
+modalita' QUALITATIVA del recommender: dato il mood dell'utente (dallo stadio NLP), l'ontologia
+restituisce i generi candidati fra cui scegliere le canzoni.
 
-Serve alla modalita' QUALITATIVA del recommender: dato il mood dell'utente (dallo stadio NLP),
-l'ontologia restituisce i generi candidati fra cui scegliere le canzoni.
+Le affinita' mood-genere sono POPOLATE EMPIRICAMENTE (ontology population) dalle distribuzioni
+di feature osservate nel catalogo: per ogni genere un mood e' associato (`ar:genreSuitsMood`)
+se la sua evidenza supera una soglia, piu' sempre il mood dominante (`ar:dominantMood`).
 
 OWL in sintassi Turtle (owl:Class / owl:ObjectProperty / owl:NamedIndividual), stesso stile di
-`ontology/algorun.owl`. Stesso principio data-grounded di `genreSuitsEffort` in AlgoRun.
-Fonti teoriche in docs/THEORY.md (Russell 1980; Karageorghis & Terry 2009; Rada 1989).
+`ontology/algorun.owl`. Fondamenti teorici in docs/THEORY.md
+(Russell 1980, valenza x arousal; Karageorghis & Terry 2009; Rada 1989).
 
 Uso:  python ontology/build_mood_ontology.py [percorso_csv]
 """
@@ -23,7 +23,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 MOODS = ["Neutral", "Focused", "Energetic", "Motivated", "Calm"]
-THRESHOLD = 0.25   # quota minima di supporto perche' un genere "serva" un mood (design -> ablation)
+THRESHOLD = 0.25   # soglia di evidenza minima perche' un genere "serva" un mood (design -> ablation)
 
 BASE = Path(__file__).parent
 DEFAULT_CSV = BASE.parent / "songs.csv"
@@ -35,7 +35,7 @@ def _iri(label: str) -> str:
 
 
 def compute(csv_path: Path) -> dict[str, dict]:
-    """genere -> {dominant, moods:[...], shares:{...}} dai supports_mood osservati."""
+    """genere -> {dominant, moods:[...], shares:{...}} dall'evidenza empirica osservata."""
     g_mood: dict[str, Counter] = defaultdict(Counter)
     with open(csv_path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -60,8 +60,8 @@ def compute(csv_path: Path) -> dict[str, dict]:
 
 def render_owl(assign: dict[str, dict]) -> str:
     L = [
-        "# GENERATO da ontology/build_mood_ontology.py — non editare a mano.",
-        "# Ontologia OWL: associazione mood -> generi ancorata ai supports_mood di songs.csv.",
+        "# Strato simbolico generato da ontology/build_mood_ontology.py — non editare a mano.",
+        "# Ontologia OWL mood -> generi; affinita' popolate empiricamente (ontology population).",
         "@prefix ar:   <http://runmaxxin.org/ontology#> .",
         "@prefix owl:  <http://www.w3.org/2002/07/owl#> .",
         "@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .",
@@ -72,9 +72,9 @@ def render_owl(assign: dict[str, dict]) -> str:
         "<http://runmaxxin.org/ontology> a owl:Ontology ;",
         '    rdfs:label "RUNMAXXIN Mood-Genre Ontology" ;',
         '    owl:versionInfo "1.0.0" ;',
-        '    rdfs:comment "Mood -> genere per la modalita\' qualitativa del recommender. '
-        'genreSuitsMood = affinita\' osservata nella colonna supports_mood di songs.csv '
-        "(share >= 0.25 o mood dominante). Fonti: Russell 1980; Karageorghis & Terry 2009; Rada 1989.\" .",
+        '    rdfs:comment "Ontologia mood -> genere: strato simbolico per la modalita\' qualitativa '
+        'del recommender. Affinita\' genreSuitsMood popolate empiricamente (soglia sull\'evidenza '
+        "+ mood dominante). Fonti: Russell 1980; Karageorghis & Terry 2009; Rada 1989.\" .",
         "",
         "#################################################################",
         "# Classi",
