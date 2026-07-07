@@ -117,17 +117,19 @@ Test deterministici (non caricano i modelli): regex dei numeri, `bpm_from_speed`
 delle etichette col catalogo, override a parole-chiave, integrità dell'ontologia.
 
 ## Demo (gli entrypoint da guardare)
-**Tester interattivo** — modelli tu le curve di sforzo e velocità e vedi come reagisce:
+**Tester** — abbini un prompt a un profilo di corsa e vedi come reagisce:
 ```bash
 pip install -r requirements.txt
-python tester.py                # chiede prompt, distanza (km), profilo, e le due curve; play 6s/canzone
+python tester.py                # chiede il prompt, poi scegli una prestazione; play 6s/canzone
 ```
-Imposti due curve a punti di controllo — **sforzo %** (0-100) e **velocità** (km/h) — su una
-**distanza** che scegli tu; il tempo e il numero di canzoni escono dall'integrazione della
-velocità sulla distanza (piano ⇒ più tempo ⇒ più canzoni). Il tester "gioca" la sessione
-canzone per canzone, mostrando i sensori (lo sforzo % → HRR, classificato dal tuo
-`physiological_state`), il target — i cui **BPM inseguono la velocità che imposti** — e la
-canzone scelta (genere, BPM, Spotify), col passaggio a **RECUPERO** quando il cuore supera la soglia.
+Scegli una **frase** e uno dei **6 archetipi di prestazione** (`steady`, `push_fatigue`,
+`negative_split`, `intervals`, `easy_recovery`, `beginner_struggle` — durate e affaticamenti
+diversi, generati da `simulate_sessions.py`). Il tester "gioca" la sessione canzone per canzone,
+mostrando l'andamento (cuore + velocità), i sensori (dal tuo `physiological_state`), il target —
+i cui **BPM inseguono la velocità reale** — la canzone scelta e le **Top-3 candidate** (genere,
+BPM), col passaggio a **RECUPERO** quando il cuore supera la soglia. Stesso profilo con prompt
+diversi (o viceversa) = la **matrice prompt × prestazione**. Una corsa vera esportata da uno
+smartwatch è semplicemente un altro dataset nello stesso formato.
 
 **Replay di una sessione pre-registrata** — non interattivo:
 ```bash
