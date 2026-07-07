@@ -1,78 +1,114 @@
-"""Genera due sessioni di allenamento simulate -> data/simulated/bpm_sessions.csv.
+"""simulate_sessions.py — libreria di ARCHETIPI di prestazione (dati sensori simulati).
 
-Formato atteso da build_dataset.py (una riga al secondo):
-  session_id, user_id, second, bpm, resting_hr, max_hr, workout_goal, phase, speed_kmh, cadence_spm
+Genera data/simulated/bpm_sessions.csv con più sessioni, ognuna un tipo di corsa diverso —
+durata diversa, andamento diverso, affaticamento diverso. Ogni riga = un secondo, con
+battito, velocità e cadenza; l'input per `build_dataset.py`.
 
-Due casi opposti:
-  A) 'marathon_ontarget'  — atleta da maratona: metriche precise, resta in zona target,
-                             bpm stabile, NON si affatica (velocita' costante).
-  B) 'push_then_fatigue'  — dice di voler spingere tantissimo, parte forte, poi si affatica:
-                             il cuore sale (drift) ma la velocita' CROLLA -> va molto piu' lento.
-
-Ogni sessione dura 30 minuti (una riga al secondo).
-
-Uso:  python simulate_sessions.py
+Servono al tester: scegli un PROMPT + uno di questi archetipi e guardi come cambia la musica.
+Una corsa vera esportata da uno smartwatch è semplicemente un altro dataset in questo formato.
 """
 from __future__ import annotations
 
 import csv
-import math
+import random
 from pathlib import Path
 
 OUT = Path(__file__).parent / "data" / "simulated" / "bpm_sessions.csv"
-DURATION = 1800   # secondi (30 minuti) per sessione
-
-COLUMNS = ["session_id", "user_id", "second", "bpm", "resting_hr", "max_hr",
-           "workout_goal", "phase", "speed_kmh", "cadence_spm"]
+random.seed(7)
 
 
 def lerp(a: float, b: float, t: float) -> float:
-    return a + (b - a) * t
+    return a + (b - a) * max(0.0, min(1.0, t))
 
 
-def marathon_ontarget() -> list[dict]:
-    """Atleta preciso: riscaldamento poi zona target stabile, nessun affaticamento."""
+def cadence_of(speed: float) -> float:
+    return max(150.0, min(190.0, 150.0 + 2.0 * speed))
+
+
+def build(session_id, user_id, resting, maxhr, goal, duration, fn) -> list[dict]:
+    """fn(s, duration) -> (bpm, speed, phase). La cadenza deriva dalla velocità + rumore."""
     rows = []
-    for s in range(DURATION):
-        if s < 300:                                  # riscaldamento (5 min)
-            t = s / 300
-            bpm, speed, cad, phase = lerp(120, 140, t), lerp(10, 15, t), lerp(165, 180, t), "warmup"
-        else:                                        # zona target, costante (25 min)
-            bpm = 140 + 1.0 * math.sin(s / 15)       # micro-oscillazione, std bassissima
-            speed, cad, phase = 15.0, 180.0, "run"
-        rows.append({"session_id": "marathon_ontarget", "user_id": "athlete_A", "second": s,
-                     "bpm": round(bpm, 1), "resting_hr": 50, "max_hr": 190,
-                     "workout_goal": "ModerateRun", "phase": phase,
-                     "speed_kmh": round(speed, 2), "cadence_spm": round(cad, 1)})
+    for s in range(duration):
+        bpm, speed, phase = fn(s, duration)
+        bpm += random.gauss(0, 1.3)
+        speed = max(1.0, speed + random.gauss(0, 0.15))
+        cad = max(120.0, cadence_of(speed) + random.gauss(0, 0.8))
+        rows.append({"session_id": session_id, "user_id": user_id, "second": s,
+                     "bpm": round(bpm, 2), "resting_hr": resting, "max_hr": maxhr,
+                     "workout_goal": goal, "phase": phase,
+                     "speed_kmh": round(speed, 2), "cadence_spm": round(cad, 2)})
     return rows
 
 
-def push_then_fatigue() -> list[dict]:
-    """Parte fortissimo poi si affatica: HR sale (drift), velocita' crolla."""
-    rows = []
-    for s in range(DURATION):
-        if s < 420:                                  # spinta iniziale (7 min)
-            t = s / 420
-            bpm, speed, cad, phase = lerp(150, 180, t), lerp(14, 17, t), lerp(180, 188, t), "push"
-        else:                                        # affaticamento progressivo (23 min)
-            t = (s - 420) / (DURATION - 420)
-            bpm, speed, cad, phase = lerp(180, 192, t), lerp(17, 9, t), lerp(188, 155, t), "fatigue"
-        rows.append({"session_id": "push_then_fatigue", "user_id": "runner_B", "second": s,
-                     "bpm": round(bpm, 1), "resting_hr": 60, "max_hr": 195,
-                     "workout_goal": "IntenseRun", "phase": phase,
-                     "speed_kmh": round(speed, 2), "cadence_spm": round(cad, 1)})
-    return rows
+# ── ARCHETIPI (durate diverse, dinamiche diverse) ─────────────────────────────
+
+def steady(s, dur):                                    # 35 min: ritmo costante in zona
+    if s < 300:
+        t = s / 300
+        return lerp(120, 142, t), lerp(10, 15, t), "warmup"
+    return 142, 15.0, "run"
+
+
+def push_fatigue(s, dur):                              # 30 min: parte forte, cede
+    if s < 480:
+        t = s / 480
+        return lerp(150, 180, t), lerp(14, 17, t), "push"
+    t = (s - 480) / (dur - 480)
+    return lerp(180, 193, t), lerp(17, 9, t), "fatigue"
+
+
+def negative_split(s, dur):                            # 40 min: parte piano, accelera, controllato
+    t = s / dur
+    return lerp(128, 172, t), lerp(11, 16, t), "build"
+
+
+def intervals(s, dur):                                 # 25 min: ripetute, oscilla
+    if s < 300:
+        t = s / 300
+        return lerp(120, 150, t), lerp(9, 12, t), "warmup"
+    cycle = (s - 300) % 300                             # 5 min per ciclo: 3 duro + 2 facile
+    if cycle < 180:
+        return 178, 17.0, "hard"
+    return 146, 9.0, "easy"
+
+
+def easy_recovery(s, dur):                             # 20 min: corsetta blanda, sforzo basso
+    t = s / dur
+    return lerp(112, 126, t), lerp(8.5, 9.5, t), "easy"
+
+
+def beginner_struggle(s, dur):                         # 22 min: erratico, cuore alto, pause camminata
+    if s < 180:
+        t = s / 180
+        return lerp(120, 176, t), lerp(8, 10, t), "spike"       # cuore schizza subito
+    if (s // 120) % 2 == 1:                             # pause camminata ogni ~2 min
+        return 168, 4.5, "walk"                         # rallenta ma il cuore resta alto
+    return 182, 9.5, "struggle"
+
+
+ARCHETYPES = [
+    ("steady",            "athlete_A",  50, 190, "ModerateRun", 2100, steady),
+    ("push_fatigue",      "runner_B",   60, 195, "IntenseRun",  1800, push_fatigue),
+    ("negative_split",    "athlete_C",  52, 188, "ModerateRun", 2400, negative_split),
+    ("intervals",         "runner_D",   55, 192, "IntenseRun",  1500, intervals),
+    ("easy_recovery",     "runner_E",   58, 186, "EasyRun",     1200, easy_recovery),
+    ("beginner_struggle", "runner_F",   70, 200, "EasyRun",     1320, beginner_struggle),
+]
 
 
 def main() -> None:
-    rows = marathon_ontarget() + push_then_fatigue()
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    all_rows = []
+    for sid, uid, rest, mx, goal, dur, fn in ARCHETYPES:
+        all_rows.extend(build(sid, uid, rest, mx, goal, dur, fn))
     with open(OUT, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=list(all_rows[0].keys()))
         w.writeheader()
-        w.writerows(rows)
-    print(f"Scritte {len(rows)} righe in {OUT}")
-    print("Sessioni: marathon_ontarget (athlete_A) + push_then_fatigue (runner_B)")
+        w.writerows(all_rows)
+    print(f"Scritte {len(all_rows)} righe in {OUT}")
+    print(f"Archetipi ({len(ARCHETYPES)}):")
+    for sid, uid, rest, mx, goal, dur, _ in ARCHETYPES:
+        print(f"  {sid:18s} {dur//60:2d} min   HR {rest}-{mx}   ({goal})")
 
 
 if __name__ == "__main__":
