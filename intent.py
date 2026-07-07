@@ -37,6 +37,28 @@ GOAL_TO_EFFORT: dict[str, tuple[str, ...]] = {
     "IntenseRun":  ("HighEffort", "VeryHighEffort"),
 }
 
+# Override deterministico a parole-chiave: se la frase contiene un segnale inequivocabile
+# di tipo, non serve il classificatore (robusto, spiegabile). Vale anche da BASELINE (esame).
+# NB: la velocita' NON basta per il goal (15 km/h = intenso per uno, medio per un altro):
+# lo sforzo reale lo misura poi il sensore. Qui usiamo solo il lessico esplicito.
+GOAL_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "IntenseRun": ("ripetut", "intervall", "scatt", "sprint", "spinger", "spingo",
+                   "a tutta", "massimo sforzo", "al limite", "distrugg", "ammazz",
+                   "sfinir", "sfianc", "fartlek", "soglia"),
+    "EasyRun":    ("recupero", "defatic", "rigenera", "scioglier", "blando",
+                   "molto piano", "passeggiat"),
+    "ModerateRun": ("maratona", "fondo", "medio", "ritmo costante", "endurance", "lungo lento"),
+}
+
+
+def goal_from_keywords(text: str) -> str | None:
+    """Tipo di allenamento da lessico esplicito, o None se nessuna parola-chiave (-> SetFit)."""
+    low = text.lower()
+    for goal, words in GOAL_KEYWORDS.items():
+        if any(w in low for w in words):
+            return goal
+    return None
+
 # numeri: velocità km/h, passo min/km, distanza km, durata min (regex, invariata da AlgoRun)
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*km\s*/?\s*h", re.I)
 _PACE = re.compile(r"(\d{1,2}):(\d{2})\s*(?:min)?\s*/?\s*km", re.I)
@@ -108,9 +130,9 @@ def route(text: str) -> dict:
 
     Doppio regime (identico ad AlgoRun): se la velocità è dichiarata (quantitativo),
     `target_bpm` è il BPM 'chirurgico' dalla cadenza; altrimenti None e comanda la banda
-    di `params` (qualitativo). `goal` = tipo di allenamento riconosciuto sempre.
+    di `params` (qualitativo). `goal` = parole-chiave se presenti, altrimenti SetFit.
     """
-    goal = predict_goal(text)
+    goal = goal_from_keywords(text) or predict_goal(text)
     mood = predict_mood(text)
     numbers = parse_numbers(text)
     target_bpm = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None

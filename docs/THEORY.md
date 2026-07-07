@@ -6,9 +6,14 @@ finte. Legenda: ✅ = fonte citabile · ⚙️ = design (→ ablation).
 
 ## Stadio 1 — NLP: frase → features (`intent.py`, `train_intent.py`)
 
-### N1. Riconoscimento del tipo di allenamento e del mood (SetFit)
+### N1. Riconoscimento del tipo di allenamento e del mood (regole + SetFit)
 Due classificatori few-shot (SetFit) sul vocabolario di `songs.csv`:
 `goal ∈ {EasyRun, ModerateRun, IntenseRun}` e `mood ∈ {Neutral, Focused, Energetic, Motivated, Calm}`.
+Il `goal` usa un **override a parole-chiave** deterministico quando la frase contiene un segnale
+inequivocabile (es. "ripetute", "spingere", "recupero", "maratona"); altrimenti decide SetFit.
+Lo stesso override è il **baseline** del confronto in `eval_intent.py` (SetFit vs regole → ablation
+con accuracy e F1 per classe su un test tenuto fuori). La velocità NON determina il goal (è
+relativa alla forma dell'atleta): lo sforzo reale lo misura il sensore (Karvonen).
 - ✅ **Russell 1980** — modello circumplex (valenza × arousal): il mood vive in uno spazio 2D
   che orienta la scelta musicale.
 - ✅ **Karageorghis & Terry 2009** — tempo/energia musicale ↔ arousal e resa sportiva.

@@ -7,7 +7,7 @@ import csv
 from pathlib import Path
 
 from intent import (GOAL_LABELS, GOAL_PARAMS, GOAL_TO_EFFORT, MOOD_LABELS,
-                    bpm_from_speed, parse_numbers)
+                    bpm_from_speed, goal_from_keywords, parse_numbers)
 
 CSV = Path(__file__).parent / "songs.csv"
 
@@ -58,6 +58,21 @@ def test_goal_params_consistent():
 
 def test_goal_to_effort_covers_all_goals():
     assert set(GOAL_TO_EFFORT) == set(GOAL_LABELS)
+
+
+def test_goal_keyword_override():
+    # segnali espliciti -> deterministici (il buco 'spingere tantissimo' e' chiuso)
+    assert goal_from_keywords("oggi voglio spingere tantissimo") == "IntenseRun"
+    assert goal_from_keywords("corsa di recupero blando") == "EasyRun"
+    assert goal_from_keywords("fondo lungo per la maratona") == "ModerateRun"
+    # nessuna parola-chiave -> None (decide SetFit)
+    assert goal_from_keywords("una corsa qualsiasi") is None
+    # tutte le label prodotte sono valide
+    for g in GOAL_KEYWORDS_OUT:
+        assert g in GOAL_LABELS
+
+
+GOAL_KEYWORDS_OUT = ("IntenseRun", "EasyRun", "ModerateRun")
 
 
 def test_labels_are_subset_of_csv_vocab():

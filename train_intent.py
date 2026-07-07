@@ -41,6 +41,14 @@ GOAL_TRAIN = [
     ("sprint e pausa, ripetuti", "IntenseRun"), ("oggi si scatta a tutta", "IntenseRun"),
     ("fartlek con variazioni e accelerazioni forti", "IntenseRun"), ("un minuto a palla e uno piano", "IntenseRun"),
     ("massimo sforzo a ripetizioni", "IntenseRun"), ("quattrocento metri veloci con recupero", "IntenseRun"),
+
+    # intensita' senza gergo tecnico (il buco emerso nella prova end-to-end)
+    ("voglio spingere tantissimo oggi", "IntenseRun"), ("oggi a tutta, il massimo sforzo", "IntenseRun"),
+    ("voglio distruggermi di fatica", "IntenseRun"), ("diamoci dentro forte oggi", "IntenseRun"),
+    ("oggi si soffre, spingo al limite", "IntenseRun"), ("voglio sfinirmi correndo", "IntenseRun"),
+    ("corsa durissima, dare tutto fino a crollare", "IntenseRun"), ("oggi mi voglio far male sul serio", "IntenseRun"),
+    # negazioni / facile senza gergo
+    ("oggi non voglio faticare per niente", "EasyRun"), ("me la prendo molto comoda", "EasyRun"),
 ]
 
 GOAL_TEST = [
@@ -50,6 +58,10 @@ GOAL_TEST = [
     ("Andiamo a smaltire la pizza senza fretta", "EasyRun"),
     ("Fammela sudare tanto ma a ritmo costante e regolare", "ModerateRun"),
     ("Voglio il cuore in gola a fasi alterne con scatti", "IntenseRun"),
+    # intensita'/facile senza gergo (mostrano dove SetFit batte il baseline a keyword)
+    ("oggi do' tutto me stesso fino a crollare", "IntenseRun"),
+    ("una corsa serena e senza pensieri", "EasyRun"),
+    ("tengo un buon ritmo regolare per un bel po'", "ModerateRun"),
 ]
 
 # ---------------------------------------------------------------------------
