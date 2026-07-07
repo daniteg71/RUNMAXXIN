@@ -1,26 +1,3 @@
-"""Controller di RUNMAXXIN: genera il VETTORE TARGET per il recommender.
-
-Il recommender (collega) riceve un target e assegna a ogni canzone una probabilita' in base
-alla DISTANZA dal target. Questo file produce quel target, fondendo:
-  - le feature del prompt iniziale (intent.route: goal, mood, target_bpm, params)
-  - i dati che arrivano dai sensori (physiological_state: mean_hrr, effort_state, trend_state)
-
-Regole teoriche:
-  - QUANTITATIVO (velocita' dichiarata): target stretto attorno al bpm calcolato (Van Dyck),
-    tau basso -> exploit (resta preciso).
-  - QUALITATIVO: range piu' largo, generi ristretti al mood (genre_mood), tau piu' alto ->
-    explore (variabilita' musicale; softmax di Sutton & Barto).
-  - CONSAPEVOLE DEL TIPO: su IntenseRun/ripetute alterna veloce/lento rispetto alla canzone
-    precedente (se l'ultima era veloce, punta piu' lento).
-  - Il cuore comanda: safety override a HRR alta -> vettore di recupero. La soglia non
-    e' una costante Python: e' un dato dichiarato nell'ontologia (ontology/runner_state.owl,
-    ar:CriticalState ar:hasThreshold), e la classificazione la fa una query SPARQL
-    (symbolic.is_critical_state) -- non un confronto scritto a mano qui.
-
-Funzione pura, nessun loop, nessun recommender: solo decide() -> Target.
-"""
-
-
 #  il seguente codice rappresnta il core del progetto: prende l'output del modulo NLP e lo 
 #  stato corrente rilevato dai sensori, li fonde e costruisce il target che verrà passato al recommender
 
