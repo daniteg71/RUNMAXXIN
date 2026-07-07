@@ -68,6 +68,23 @@ genreSuitsMood(genre) = { mood : share ≥ 0.25 } ∪ { argmax_mood share }
 Uso: in regime QUALITATIVO (nessun BPM 'chirurgico'), `genres_for_mood(mood)` restituisce i
 generi candidati fra cui il recommender pesca le canzoni.
 
+## Controller: generazione del vettore target (`controller.py`)
+
+### C1. Fusione testo ↔ sensori e regimi
+`decide(intent, analysis)` produce il vettore target `[bpm, energy, valence]` + raggio + `tau`.
+- **Quantitativo** (velocità dichiarata): target stretto attorno al `bpm` da cadenza
+  (Van Dyck 2015), `tau` basso → **exploit**.
+- **Qualitativo**: range largo, generi ristretti al mood (ontologia), `tau` più alto → **explore**.
+- ✅ **Sutton & Barto** — `tau` è la temperatura del softmax/Boltzmann che regola
+  exploration/exploitation: alto = varia, basso = preciso.
+- ✅ **Russell 1980** — `valence` target dal mood (`VALENCE_BY_MOOD`).
+
+### C2. Safety override e variazione per tipo
+- `mean_hrr ≥ 0.90` → vettore di **recupero** (bpm → banda facile, energy ≤ 0.30): il cuore
+  vince sull'intento. ⚙️ soglia 0.90 ancorata al limite fisiologico (design → ablation).
+- IntenseRun/ripetute: alterna veloce/lento rispetto alla canzone precedente (`last_bpm`) →
+  variabilità di ritmo tipica del lavoro a intervalli. ⚙️ design.
+
 ## Stadio 3 — Recommender (fuori scope per ora)
 Softmax/Boltzmann per exploration/exploitation della prossima canzone.
 - ✅ **Sutton & Barto**, *Reinforcement Learning: An Introduction* — softmax (τ alto esplora, τ→0 sfrutta).
