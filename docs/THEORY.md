@@ -79,7 +79,12 @@ generi candidati fra cui il recommender pesca le canzoni.
   exploration/exploitation: alto = varia, basso = preciso.
 - ✅ **Russell 1980** — `valence` target dal mood (`VALENCE_BY_MOOD`).
 
-### C2. Safety override e variazione per tipo
+### C2. Riscaldamento (warm-up)
+Nei primi `WARMUP_MIN` (=5) minuti il target sale linearmente da una banda bassa (~120 bpm,
+energia 0.20) fino al target previsto dell'allenamento: si parte piano e si accelera prima di
+entrare nel lavoro. ⚙️ durata e rampa = design → ablation (buona pratica di allenamento).
+
+### C3. Safety override e variazione per tipo
 - `mean_hrr ≥ 0.90` → vettore di **recupero** (bpm → banda facile, energy ≤ 0.30): il cuore
   vince sull'intento. ⚙️ soglia 0.90 ancorata al limite fisiologico (design → ablation).
 - IntenseRun/ripetute: alterna veloce/lento rispetto alla canzone precedente (`last_bpm`) →

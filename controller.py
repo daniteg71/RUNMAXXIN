@@ -30,6 +30,7 @@ TAU_EXPLOIT = 0.2        # temperatura bassa = sfrutta (preciso); alta = esplora
 CALM = 0.7               # fattore "calmati" (dici easy ma sali)
 PUSH = 1.2               # fattore "spingi"  (dici intense ma vai piano)
 RECOVERY_BPM = GOAL_PARAMS["EasyRun"]["bpm"][0]   # in recupero scendi sempre a ~banda facile
+WARMUP_MIN = 5.0         # riscaldamento: i primi minuti parti basso e sali fino al target
 
 # mood -> valenza target (Russell 1980; arousal/positivita' della musica)
 VALENCE_BY_MOOD = {"Energetic": 0.75, "Motivated": 0.70, "Focused": 0.45,
@@ -73,11 +74,13 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-def decide(intent: dict, analysis=None, last_bpm: float | None = None) -> Target:
+def decide(intent: dict, analysis=None, last_bpm: float | None = None,
+           elapsed_min: float | None = None) -> Target:
     """Frase (intent) + stato sensori (analysis) -> vettore Target per il recommender.
 
     `analysis` None = cold start (nessun sensore ancora). `last_bpm` = bpm della canzone
-    precedente, usato per la variazione veloce/lento su IntenseRun.
+    precedente (variazione veloce/lento su IntenseRun). `elapsed_min` = minuti dall'inizio:
+    nei primi WARMUP_MIN il target sale gradualmente da basso al valore previsto (riscaldamento).
     """
     goal = intent.get("goal") or "ModerateRun"
     mood = intent.get("mood") or "Neutral"
@@ -139,14 +142,21 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None) -> Target
         bpm = lo + (hi - lo) * 0.25 if last_bpm >= mid else lo + (hi - lo) * 0.75
         tol = NARROW                                         # punta preciso l'estremo scelto
 
-    # 5) riempimento + clamp
+    # 5) riscaldamento: nei primi minuti parti basso e sali fino al target previsto
+    regime = "quantitative" if quantitative else "qualitative"
+    if elapsed_min is not None and elapsed_min < WARMUP_MIN:
+        f = max(0.0, elapsed_min) / WARMUP_MIN          # 0 -> parti da fermo, 1 -> a regime
+        bpm = RECOVERY_BPM + (bpm - RECOVERY_BPM) * f
+        energy = 0.20 + (energy - 0.20) * f
+        regime = "warmup"
+
+    # 6) riempimento + clamp
     valence = VALENCE_BY_MOOD.get(mood, 0.5)
     return Target(bpm=round(_clamp(bpm, 80, 200), 1),
                   energy=round(_clamp(energy, 0.0, 1.0), 3),
                   valence=valence, weights=weights, bpm_tolerance=round(tol, 1),
                   genres=genres, tau=round(tau, 3), mood=mood, goal=goal,
-                  effort_band=GOAL_TO_EFFORT[goal], recovery=False,
-                  regime="quantitative" if quantitative else "qualitative")
+                  effort_band=GOAL_TO_EFFORT[goal], recovery=False, regime=regime)
 
 
 def _demo() -> None:
@@ -171,6 +181,11 @@ def _demo() -> None:
     show("IntenseRun qualitativo, ultima canzone veloce (varia -> lento)",
          decide(ql, analysis={"mean_hrr": 0.7, "effort_state": "TargetEffort", "trend_state": "Stable"}, last_bpm=182))
     show("SAFETY: HRR 0.95 -> recupero", decide(q, analysis={"mean_hrr": 0.95, "effort_state": "VeryHighEffort", "trend_state": "Increasing"}))
+
+    print("\n== RISCALDAMENTO (quantitativo, elapsed 0->6 min): parti basso e sali ==")
+    for e in (0, 1, 2, 3, 5, 6):
+        t = decide(q, elapsed_min=e)
+        print(f"  t={e}min  bpm={t.bpm:>5}  energy={t.energy:>5}  regime={t.regime}")
 
 
 if __name__ == "__main__":
