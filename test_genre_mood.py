@@ -7,7 +7,7 @@ import csv
 from pathlib import Path
 
 from intent import MOOD_LABELS
-from genre_mood import (GENRE_TO_MOODS, dominant_genres_for_mood,
+from genreTOmood import (GENRE_TO_MOODS, dominant_genres_for_mood,
                         genres_for_mood, moods_for_genre)
 
 BASE = Path(__file__).parent

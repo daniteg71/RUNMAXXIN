@@ -7,14 +7,14 @@
 #    - annotations per usare annotazioni di tipo più flessibili
 #    - dataclasses per creare classe target, convertire target in dizionario
 #    - intent per recuperare parametri associati a (EasyRun/ModerateRun/IntenseRun), collegare goal a bande fisiologiche, stimare BPM da velocità
-#    - genre_mood per recuperare generi compatibili con il mood
+#    - genreTOmood per recuperare generi compatibili con il mood
 #    - symbolic per verificare tramite componente simbolica e ontologia se lo stato cardiaco è critico
 
 
 from __future__ import annotations
 from dataclasses import asdict, dataclass
 from intent import GOAL_PARAMS, GOAL_TO_EFFORT, bpm_from_speed
-from genre_mood import genres_for_mood
+from genreTOmood import genres_for_mood
 from symbolic import is_critical_state
 
 
