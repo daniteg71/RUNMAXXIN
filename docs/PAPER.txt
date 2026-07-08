@@ -1,0 +1,95 @@
+Project Title: RUNMAXXIN: Adaptive Music Recommendation for Runners via NLP and Physiological Signal Fusion
+
+Daniele Tegliucci, Alberto Tridente
+Bachelor's Degree Programme in Applied Computer Science and Artificial Intelligence (ACSAI)
+Course: AI-LAB - Computer Vision, Signal Processing, and Natural Language Processing
+Department of Computer Science, Sapienza University of Rome
+Matricola: 2169138, 2173368
+[email studente 1]
+[email studente 2]
+
+
+Abstract
+
+This report introduces RUNMAXXIN, a neuro-symbolic Cyber-Physical System for real-time music recommendation during running. Traditional systems rely on static playlisting, failing to adapt to the runner's physiological state. We propose a closed-loop architecture that fuses NLP-based intent extraction with real-time biometric analysis. Using a compact SetFit few-shot classifier for NLP and a lightweight symbolic layer - encoded as an explicit, queryable knowledge base rather than application logic - for decision-making, the system dynamically maps user goals to optimal acoustic targets (BPM, Energy, Valence). A safety-critical controller enforces deterministic overrides, forcing recovery tracks when biometric thresholds (HRR > 90%) are exceeded. Validated on simulated session logs, the system achieves an F1-score of 0.82 for training-goal classification and an average inference latency of 16 ms, demonstrating an efficient, safety-aware paradigm for edge-deployed athletic support.
+
+Keywords: natural language processing; physiological sensors; ontology; recommendation systems; sport
+
+
+1 Introduction
+
+Running-music systems have historically taken one of two limited forms: static, manually curated playlists, or a direct mapping from a single physiological signal to a musical parameter, with no way for the runner to state what they actually want to do. One of the earliest and most influential examples, MPTrain, adjusts music based on a runner's heart rate and pace, but treats adaptation and safety as the same opaque, learned mechanism, with no separate channel for a stated intent and no inspectable safety rule. More recent open-source projects have not closed this gap: direct inspection of two actively maintained ones shows neither performs real multi-sensor fusion nor enforces any safety threshold when the runner's heart rate becomes dangerously high, relying instead on simple tempo-matching.
+
+This is an interesting problem for Artificial Intelligence beyond its sporting context, because it requires reconciling two signals that can genuinely disagree - what the runner says they intend to do, and what their body is actually doing - through a decision layer that can be inspected and trusted, rather than a single end-to-end model. It sits between two lines of research that rarely meet: context-aware music recommendation, which typically reacts to coarse context such as time of day or activity type rather than continuously measured physiological state, and neuro-symbolic recommendation, where a symbolic, rule-based component is combined with a statistical one - an idea explored in other domains, such as cultural-heritage recommendation, but not yet, to our knowledge, in a real-time, safety-relevant sport setting.
+
+Our contribution is not a new model, but a set of deliberate architectural choices and empirical checks. First, where standard practice - and much of the coursework this project builds on - favors fine-tuning large Transformer encoders on thousands of examples, we instead use a lightweight few-shot classifier trained on only a few dozen examples per class, and justify this choice with measurements rather than convenience: it reaches meaningfully higher accuracy than a simple rule-based baseline, at an inference time fast enough to run comfortably in real time. Second, we do not assume our own pipeline works correctly; we test it. We find that the component responsible for choosing the next song, despite computing a probability over candidates, effectively behaves in a fixed, predictable way and disregards the runner's physiological safety limits in a measurable share of cases - a concrete flaw we then correct with a small corrective step, rather than simply reporting a working system. Third, for the part of the system that must enforce hard safety rules - for instance, forcing a slow recovery song once a runner's heart-rate reserve (the fraction of their heart-rate range currently in use, following the classical Karvonen formulation) crosses a critical threshold - we deliberately chose a simple, explicit rule check over a heavier automated reasoning engine, since the latter is built for classifying static facts, not for reacting many times per minute to changing sensor readings.
+
+Taken together, this positions RUNMAXXIN against prior work in three concrete ways: it adds a language-based intent channel that none of the systems we reviewed possess; it demonstrates, rather than assumes, where a purely statistical recommendation component fails and corrects it; and it makes a documented, justified choice between a lightweight and a heavier reasoning strategy for the one part of the system where safety cannot be left to a learned model alone.
+
+[LAST PARAGRAPH - report structure - to be written last]
+
+
+2 Related Work
+
+The idea of adapting music to a runner's body is not new. The earliest and most influential example is MPTrain [1], which monitors heart rate and step frequency and selects songs whose tempo steers the user toward a target heart-rate curve; its successor PAPA [2] generalizes this into physiology- and purpose-aware playlist generation. A related line of work, the affective music player of Janssen et al. [3], instead uses biosignals to guide a listener toward a desired emotional state rather than a performance goal. These systems established the premise we build on - that physiological signals should drive music selection in real time - and they rest on well-documented sport-psychology research showing that musical tempo and rhythmic entrainment measurably affect perceived exertion and performance [4], [5]. In all of them, however, the user's goal must be given as a number (a heart-rate curve, a mood coordinate), never in words, and adaptation and safety are handled by a single learned mapping with no separately inspectable rule. Our system departs on both points: it takes a short natural-language prompt as the goal, and it keeps the safety logic explicit and separate from the statistical recommender.
+
+More recent work has moved music recommendation toward deep learning. The seminal approach of van den Oord et al. [6] predicts latent preference factors directly from audio with convolutional networks and remains a reference for content-based recommendation. This direction favors large, data-hungry, and largely opaque models - a reasonable trade-off when the objective is preference accuracy, but a poor fit for our setting, where the bottleneck is real-time safety rather than fine-grained taste prediction and where interpretability matters. For the language side of our pipeline we instead adopt SetFit [7], a few-shot method that contrastively fine-tunes a sentence-embedding model and trains a lightweight classification head (Fig. 2), reaching competitive accuracy from only a few dozen labeled examples per class - without the data or latency cost of fine-tuning a large transformer (Fig. 3). The emerging use of large language models to fuse raw sensor streams [8] is complementary but orthogonal to our aim: we use language only to capture the user's stated intent, and keep the physiological signals as compact numeric features rather than feeding them to a general-purpose model.
+
+The symbolic side of our system is closest to knowledge-based music recommenders. COMUS [9] builds an OWL ontology of mood and situation and uses rule-based reasoning to infer suitable music, explicitly bridging low-level audio features and high-level emotion; more recent neuro-symbolic pipelines [10] combine SPARQL queries over a knowledge graph with a neural component. Our use of an ontology is deliberately narrower, and this is the key distinction. In COMUS the ontology is the recommendation engine: the reasoner derives what to play. In our system the recommendation stays statistical, and the ontology acts only as a thin deterministic boundary around it - it declares the safety threshold that a SPARQL query checks, validates the numbers extracted from text through a SHACL constraint, and screens the recommender's candidates for effort compatibility. The knowledge that COMUS places inside the reasoner, such as which genres suit a given mood, we keep as explicit data outside the graph, reserving the symbolic layer for constraints that must be guaranteed rather than inferred. This also avoids the runtime cost of a full description-logic reasoner, which is ill-suited to the continuous, high-frequency updates of a running session.
+
+On the evaluation side, the standard benchmark for music recommendation is the Million Song Dataset [11], but it targets preference prediction over listening histories and does not fit a physiological, safety-constrained task; our catalogue is instead a set of Spotify audio features, and our physiological sessions are simulated - a limitation we share with much of this literature, where the lack of a standard, shareable physiological-music dataset and small participant counts are recurring problems. For the language component we follow the spirit of few-shot text-classification protocols such as RAFT [12], reporting macro-averaged F1 against a rule-based baseline on a held-out set. For the recommender, the deficiency we address - that it can return songs violating the runner's effort band - is exactly what the safety-recommendation literature formalizes as a safety-violation ratio [13], consistent with the finding that in health-related recommendation, safety outweighs accuracy as an evaluation criterion. At the opposite end of the spectrum, practical open-source projects such as heartBPMusic [14] and HeartBEAT [15] match song tempo to heart rate directly but include neither language understanding, nor safety overrides, nor any evaluation. In short, prior work either fuses physiology and music without language and without an inspectable safety layer, or reasons symbolically without real-time physiological constraints; our contribution unites a natural-language intent channel, a statistical recommender, and a symbolic safety boundary, and - unlike the practical systems above - measures and corrects a concrete safety-violation rate instead of assuming correctness.
+
+
+3 Methodology
+
+[Fig. 1 - full-width architecture/pipeline diagram: prompt -> NLP -> intent; sensors -> physiological state; controller -> target vector; recommender -> Top-K; symbolic gate -> chosen song]
+
+[TO WRITE: overall pipeline; input data and preprocessing; the models used; what is reused from existing work; what we modified/added; objective; training strategy and implementation details.]
+
+
+4 Experimental Setup
+
+4.1 Dataset
+
+[TO WRITE + Table 1: NLP few-shot examples (per-class counts, held-out split); song catalogue (Spotify audio features, ~89,500 tracks); simulated physiological sessions. State what is used as-is vs. built by us; note limitations/biases.]
+
+4.2 Training and Evaluation Protocol
+
+[TO WRITE + Table 2: hardware/software; SetFit framework; encoder paraphrase-multilingual-MiniLM-L12-v2; batch size, epochs; contrastive loss; metrics (accuracy, macro-F1); baselines (keyword rule); fair-comparison procedure.]
+
+4.3 Results
+
+[TO WRITE + Table 3: SetFit vs. keyword baseline (goal 0.83 vs 0.75); mood results; confusion matrices; inference latency 16 ms; effort-gate safety-violation rate (16.7% before, after correction); playlist diversity before/after sampling fix.]
+
+4.4 Critical Discussion
+
+[TO WRITE: which method wins and why; did the correction produce a real benefit; hardest classes (IntenseRun recall); where the system fails; coherence with related work; main limitations (few-shot data, simulated sessions); future work.]
+
+
+5 Conclusion
+
+[TO WRITE: restate problem, pipeline, main findings, our contribution, limitations and future work.]
+
+
+Acknowledgments
+
+[Optional.]
+
+
+References
+
+[1] N. Oliver and F. Flores-Mangas, "MPTrain: a mobile, music and physiology-based personal trainer," in Proc. MobileHCI, 2006.
+[2] N. Oliver and L. Kreger-Stickles, "PAPA: Physiology and Purpose-Aware Automatic Playlist Generation," in Proc. ISMIR, 2006.
+[3] J. H. Janssen, E. L. van den Broek, and J. H. D. M. Westerink, "Tune in to your emotions: a robust personalized affective music player," User Modeling and User-Adapted Interaction, vol. 22, no. 3, pp. 255-279, 2012.
+[4] C. I. Karageorghis, D.-L. Priest, et al., "Music in the exercise domain: a review and synthesis (Part I and Part II)," International Review of Sport and Exercise Psychology, vol. 5, 2012.
+[5] E. Van Dyck, B. Moens, et al., "Spontaneous entrainment of running cadence to music tempo," Sports Medicine - Open, vol. 1, 2015.
+[6] A. van den Oord, S. Dieleman, and B. Schrauwen, "Deep content-based music recommendation," in Advances in Neural Information Processing Systems (NIPS), 2013.
+[7] L. Tunstall, N. Reimers, U. E. S. Jo, L. Bates, D. Korat, M. Wasserblat, and O. Pereg, "Efficient Few-Shot Learning Without Prompts," arXiv:2209.11055, 2022.
+[8] Z. Li et al., "SensorLLM: Aligning Large Language Models with Motion Sensors for Human Activity Recognition," arXiv:2410.10624, 2024.
+[9] S. Song, M. Kim, S. Rho, and E. Hwang, "Music Ontology for Mood and Situation Reasoning to Support Music Retrieval and Recommendation (COMUS)," 2009.
+[10] K. Kutt et al., "A Three-stage Neuro-symbolic Recommendation Pipeline for Cultural Heritage Knowledge Graphs," arXiv, 2026.
+[11] T. Bertin-Mahieux, D. P. W. Ellis, B. Whitman, and P. Lamere, "The Million Song Dataset," in Proc. ISMIR, 2011.
+[12] N. Alex et al., "RAFT: A Real-World Few-Shot Text Classification Benchmark," in Proc. NeurIPS Datasets and Benchmarks, 2021.
+[13] "SafeCRS: Personalized Safety Alignment for LLM-Based Conversational Recommender Systems," arXiv:2603.03536, 2026.
+[14] C. Wu, "heartBPMusic," GitHub repository. https://github.com/ColinWu0403/heartBPMusic
+[15] M. Ray, "HeartBEAT," GitHub repository. https://github.com/mray190/HeartBEAT

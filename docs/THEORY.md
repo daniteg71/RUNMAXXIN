@@ -19,6 +19,16 @@ relativa alla forma dell'atleta): lo sforzo reale lo misura il sensore (Karvonen
 - ✅ **Karageorghis & Terry 2009** — tempo/energia musicale ↔ arousal e resa sportiva.
 - ⚙️ set di label, frasi few-shot e l'uso di SetFit = design → ablation.
 
+**Risultati eval (`eval_intent.py`, test tenuto fuori):** MOOD accuracy 1.000 (10/10). GOAL
+accuracy 0.833 (10/12) contro 0.750 del baseline a keyword — SetFit generalizza meglio ma non
+è perfetto. La confusion matrix isola l'errore: **2 frasi IntenseRun senza gergo tecnico**
+("cuore in gola a fasi alterne con scatti", "do' tutto me stesso fino a crollare") vengono
+classificate **EasyRun**, mai ModerateRun — non è rumore ma un bias sistematico del training
+set (`GOAL_TRAIN`), che ha pochi esempi IntenseRun "senza gergo" rispetto a EasyRun/ModerateRun
+"senza gergo": il classificatore associa l'assenza di lessico tecnico a bassa intensità invece
+di leggere la semantica dello sforzo massimo. Fix proposto: arricchire `GOAL_TRAIN` con altri
+esempi IntenseRun senza gergo prima di ripetere `train_intent.py`.
+
 ### N2. Numeri dalla frase → BPM desiderato (regime quantitativo)   `bpm_from_speed`
 ```
 cadenza(spm) = clamp(134 + 2.9 · velocità(km/h), 150, 190)
