@@ -1,4 +1,4 @@
-\documentclass[10pt,twocolumn,a4paper]{article}
+\documentclass[11pt,a4paper]{article}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -11,11 +11,10 @@
 
 \geometry{
 	a4paper,
-	left=1.6cm,
-	right=1.6cm,
-	top=1.8cm,
-	bottom=2.0cm,
-	columnsep=0.7cm
+	left=2.5cm,
+	right=2.5cm,
+	top=2.2cm,
+	bottom=2.5cm
 }
 
 \setlength{\parindent}{0.35cm}
@@ -69,20 +68,20 @@
 
 	More recent work has moved music recommendation toward deep learning. The seminal approach of van den Oord et al.~\cite{oord2013deep} predicts latent preference factors directly from audio with convolutional networks and remains a reference for content-based recommendation. This direction favors large, data-hungry, and largely opaque models -- a reasonable trade-off when the objective is preference accuracy, but a poor fit for our setting, where the bottleneck is real-time safety rather than fine-grained taste prediction and where interpretability matters. For the language side of our pipeline we instead adopt SetFit~\cite{tunstall2022setfit}, a few-shot method that contrastively fine-tunes a sentence-embedding model and trains a lightweight classification head (Fig.~\ref{fig:setfit-arch}), reaching competitive accuracy from only a few dozen labeled examples per class -- without the data or latency cost of fine-tuning a large transformer (Fig.~\ref{fig:setfit-cr}). The emerging use of large language models to fuse raw sensor streams~\cite{sensorllm2024} is complementary but orthogonal to our aim: we use language only to capture the user's stated intent, and keep the physiological signals as compact numeric features rather than feeding them to a general-purpose model.
 
-	\begin{figure*}[t]
+	\begin{figure}[t]
 		\centering
-		\figplaceholder{0.9\textwidth}{3cm}
-		% \includegraphics[width=0.9\textwidth]{figures/setfit-architecture.png}
+		\figplaceholder{0.95\textwidth}{3cm}
+		% \includegraphics[width=0.95\textwidth]{figures/setfit-architecture.png}
 		\caption{The SetFit training scheme: contrastive fine-tuning of a Sentence Transformer on few-shot sentence pairs, followed by training a lightweight classification head on the resulting embeddings. Adapted from Tunstall et al.~\cite{tunstall2022setfit}.}
 		\label{fig:setfit-arch}
-	\end{figure*}
+	\end{figure}
 
 	The symbolic side of our system is closest to knowledge-based music recommenders. COMUS~\cite{song2009comus} builds an OWL ontology of mood and situation and uses rule-based reasoning to infer suitable music, explicitly bridging low-level audio features and high-level emotion; more recent neuro-symbolic pipelines~\cite{kutt2026neurosymbolic} combine SPARQL queries over a knowledge graph with a neural component. Our use of an ontology is deliberately narrower, and this is the key distinction. In COMUS the ontology \emph{is} the recommendation engine: the reasoner derives what to play. In our system the recommendation stays statistical, and the ontology acts only as a thin deterministic boundary around it -- it declares the safety threshold that a SPARQL query checks, validates the numbers extracted from text through a SHACL constraint, and screens the recommender's candidates for effort compatibility. The knowledge that COMUS places inside the reasoner, such as which genres suit a given mood, we keep as explicit data outside the graph, reserving the symbolic layer for constraints that must be \emph{guaranteed} rather than \emph{inferred}. This also avoids the runtime cost of a full description-logic reasoner, which is ill-suited to the continuous, high-frequency updates of a running session.
 
 	\begin{figure}[t]
 		\centering
-		\figplaceholder{\columnwidth}{4.5cm}
-		% \includegraphics[width=\columnwidth]{figures/setfit-fewshot-cr.png}
+		\figplaceholder{0.62\textwidth}{4.5cm}
+		% \includegraphics[width=0.62\textwidth]{figures/setfit-fewshot-cr.png}
 		\caption{In the low-data regime, SetFit reaches high accuracy from a handful of labeled examples per class, where fine-tuning a large transformer (RoBERTa-large) still lags. Adapted from Tunstall et al.~\cite{tunstall2022setfit}.}
 		\label{fig:setfit-cr}
 	\end{figure}
@@ -91,14 +90,14 @@
 
 	\section{Methodology}
 
-	% First element: full-width architecture figure (template requirement).
-	\begin{figure*}[t]
+	% First element of Methodology: the architecture figure (template requirement).
+	\begin{figure}[t]
 		\centering
-		\figplaceholder{0.95\textwidth}{4cm}
-		% \includegraphics[width=0.95\textwidth]{figures/architecture.png}
+		\figplaceholder{0.98\textwidth}{4cm}
+		% \includegraphics[width=0.98\textwidth]{figures/architecture.png}
 		\caption{RUNMAXXIN pipeline: a natural-language prompt is classified into a goal and mood; physiological windows are turned into effort and trend features; the controller fuses both into an acoustic target vector; the recommender returns Top-K candidate songs; and a symbolic gate enforces the safety and effort constraints before a song is played.}
 		\label{fig:architecture}
-	\end{figure*}
+	\end{figure}
 
 	% [TO WRITE: overall pipeline (Fig.~\ref{fig:architecture}); input data and preprocessing;
 	% models used; what is reused vs. our own contribution; objective; training/implementation.]
