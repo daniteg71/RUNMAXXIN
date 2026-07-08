@@ -7,7 +7,7 @@ Uso:  python eval_intent.py     # richiede i modelli in models/ (python train_in
 """
 from pathlib import Path
 
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 from train_intent import GOAL_TEST, MOOD_TEST
 from intent import goal_from_keywords
@@ -28,6 +28,12 @@ def evaluate(name: str, model_dir: str, test: list, baseline=None) -> None:
     print(f"\n===== {name} — SetFit ({len(test)} esempi tenuti fuori) =====")
     print(f"accuracy: {accuracy_score(y, pred):.3f}")
     print(classification_report(y, pred, zero_division=0))
+    labels = sorted(set(y))
+    cm = confusion_matrix(y, pred, labels=labels)
+    print("confusion matrix (righe=gold, colonne=pred):")
+    print("            " + " ".join(f"{l[:10]:>10s}" for l in labels))
+    for lbl, row in zip(labels, cm):
+        print(f"{lbl[:10]:>10s}  " + " ".join(f"{v:>10d}" for v in row))
     if baseline is not None:
         # baseline a regole: keyword se c'e', altrimenti la classe piu' frequente (ModerateRun)
         bp = [baseline(x) or "ModerateRun" for x in X]
