@@ -1,46 +1,61 @@
-"""Stadio 1 (NLP) di RUNMAXXIN: frase -> {goal, mood, numbers, target_bpm, params}.
+#  il seguente codice rappresenta il primo stadio della pipeline, contiene
+#  il modulo NLP che trasforma una frase dell'utente in dati strutturati
 
-Stessa logica dell'estrattore d'intento di AlgoRun (regex per i numeri + SetFit per la
-classificazione), ma le etichette sono riaddestrate sul vocabolario di `songs.csv`:
-  - goal (tipo di allenamento): EasyRun / ModerateRun / IntenseRun   (colonna supports_goal)
-  - mood:                       Neutral/Focused/Energetic/Motivated/Calm (colonna supports_mood)
+#  il codice nel complesso lavora in questo modo:
 
-Doppio regime (invariato rispetto ad AlgoRun):
-  - QUANTITATIVO: se la frase dichiara una velocita'/passo, `target_bpm` e' il BPM
-    "chirurgico" dalla cadenza (Van Dyck 2015, entrainment 1:1).
-  - QUALITATIVO: se non ci sono numeri, comanda la banda BPM del tipo (`params`).
 
-I numeri li estrae la regex (SetFit non estrae valori). Le bande/pesi/tau per tipo sono
-scelte di design (banda ancorata alla cadenza naturale 150-190 spm, energia alla teoria
-arousal-musica Karageorghis & Terry 2009) -> da giustificare con ablation nel paper.
-"""
+#   frase dell’utente
+#           ↓
+#   tipo di allenamento
+#   mood
+#   valori numerici
+#   BPM target
+#   parametri del regime
+
+
+
+#  vengono utilizzate le librerie:
+#    - annotations per usare annotazioni di tipo più flessibili
+#    - re per le espressioni regolari, ovvero per estrarre i numeri dalla frase
+#    - path per costruire i percorsi delle cartelle contenenti i modelli
+#    - symbolic per validare la velocità
+
 from __future__ import annotations
-
 import re
 from pathlib import Path
+from symbolic import validate_speed
 
-# --- modelli SetFit (lazy-load): uno per il goal, uno per il mood -------------
+
+#  vengono utilizzati modelli distinti:
+#    - goal model, per prevedere il tipo di allenamento (EasyRun/ModerateRun/IntenseRun)
+#    - mood model, per prevdere il mood (Neutral/Focused/Energetic/Motivated/Calm)
+
 _GOAL_MODEL = None
 _MOOD_MODEL = None
 _GOAL_DIR = Path(__file__).parent / "models" / "intent-goal-setfit"
 _MOOD_DIR = Path(__file__).parent / "models" / "intent-mood-setfit"
 
-# --- vocabolario ancorato a songs.csv -----------------------------------------
+
+
+#  label utilizzate per allenare modello SetFit, vocabolario ancorato a songs.csv
+
 GOAL_LABELS = ("EasyRun", "ModerateRun", "IntenseRun")
 MOOD_LABELS = ("Neutral", "Focused", "Energetic", "Motivated", "Calm")
 
-# ponte verso lo stadio 2/3: il tipo (testo) suggerisce la banda di sforzo; lo sforzo
-# vero lo misura il sensore (Karvonen, effort_state in physiological_state.py).
+
+#  dizionario che mappa tipo di allenamento → effort rilevato dal sensore
+#  ponte tra intenzione linguistica e stato fisiologico
+
 GOAL_TO_EFFORT: dict[str, tuple[str, ...]] = {
     "EasyRun":     ("LowEffort", "TargetEffort"),
     "ModerateRun": ("TargetEffort",),
     "IntenseRun":  ("HighEffort", "VeryHighEffort"),
 }
 
-# Override deterministico a parole-chiave: se la frase contiene un segnale inequivocabile
-# di tipo, non serve il classificatore (robusto, spiegabile). Vale anche da BASELINE (esame).
-# NB: la velocita' NON basta per il goal (15 km/h = intenso per uno, medio per un altro):
-# lo sforzo reale lo misura poi il sensore. Qui usiamo solo il lessico esplicito.
+
+#  prima di interrogare il modello SetFit, si prova a riconoscere il 
+#  tipo di allenamento attraverso delle specifiche keywords
+
 GOAL_KEYWORDS: dict[str, tuple[str, ...]] = {
     "IntenseRun": ("ripetut", "intervall", "scatt", "sprint", "spinger", "spingo",
                    "a tutta", "massimo sforzo", "al limite", "distrugg", "ammazz",
@@ -51,22 +66,27 @@ GOAL_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
+#  la seguente funzione converte la frase in minuscolo e controlla 
+#  la presenza di keyword all'interno della frase dell'utente
+
 def goal_from_keywords(text: str) -> str | None:
-    """Tipo di allenamento da lessico esplicito, o None se nessuna parola-chiave (-> SetFit)."""
     low = text.lower()
     for goal, words in GOAL_KEYWORDS.items():
         if any(w in low for w in words):
             return goal
     return None
 
-# numeri: velocità km/h, passo min/km, distanza km, durata min (regex, invariata da AlgoRun)
+
+#  viene utilizzato una Regex per riconoscere i valori (velocità/passo/distanza/durata)
+
 _SPEED = re.compile(r"(\d+(?:[.,]\d+)?)\s*km\s*/?\s*h", re.I)
 _PACE = re.compile(r"(\d{1,2}):(\d{2})\s*(?:min)?\s*/?\s*km", re.I)
 _DIST = re.compile(r"(\d+(?:[.,]\d+)?)\s*km(?!\s*/?\s*h)", re.I)
 _DUR = re.compile(r"(\d+)\s*(?:min|minuti)\b", re.I)
 
-# goal -> (banda BPM, energia target, pesi scoring, temperatura esplorazione).
-# Ex TYPE_PARAMS di AlgoRun, ri-chiavata sulle 3 label del CSV (stessa struttura, stessa logica).
+
+#  questo dizionario rappresenta il collegamento fra l'output NLP ed il controller e reccomender
+
 GOAL_PARAMS: dict[str, dict] = {
     "EasyRun":     {"bpm": (120, 135), "energy": 0.25, "w_bpm": 0.2, "w_mood": 0.8, "tau": 1.0},
     "ModerateRun": {"bpm": (140, 160), "energy": 0.55, "w_bpm": 0.5, "w_mood": 0.5, "tau": 0.4},
@@ -74,13 +94,14 @@ GOAL_PARAMS: dict[str, dict] = {
 }
 
 
+#  le seguenti 2 funzioni caricano i modelli solamente quando vengono usati per la prima volta
+
 def _goal_model():
     global _GOAL_MODEL
     if _GOAL_MODEL is None:
         from setfit import SetFitModel
         _GOAL_MODEL = SetFitModel.from_pretrained(str(_GOAL_DIR))
     return _GOAL_MODEL
-
 
 def _mood_model():
     global _MOOD_MODEL
@@ -90,34 +111,30 @@ def _mood_model():
     return _MOOD_MODEL
 
 
+#  nelle seguenti due funzioni il testo della frase viene inserito in una lista
+#  ed il modello predice goal/mood. 
+#  viene estratta la prima predizione [0] e la si casta a stringa
+
 def predict_goal(text: str) -> str:
-    """Frase -> tipo di allenamento (EasyRun/ModerateRun/IntenseRun)."""
     return str(_goal_model().predict([text])[0])
 
 
 def predict_mood(text: str) -> str:
-    """Frase -> mood (Neutral/Focused/Energetic/Motivated/Calm)."""
     return str(_mood_model().predict([text])[0])
 
 
+
+#  la seguente funzione estrae i valori (velocità/passo/distanza/durata)
+#  per poi salvarli all'interno di un dizionario
+
 def parse_numbers(text: str) -> dict:
-    """Estrae i valori quantitativi dalla frase (invariato da AlgoRun).
-
-    La velocità estratta passa dal Constraint Gate SHACL (symbolic.validate_speed,
-    ontology/nlp_shapes.ttl): un numero fisiologicamente assurdo (es. "300 km/h",
-    allucinazione o refuso) viene SCARTATO qui, esplicitamente, invece di essere
-    silenziosamente clampato più avanti da bpm_from_speed.
-    """
-    from symbolic import validate_speed
-
     n: dict = {}
     if (m := _SPEED.search(text)):
         n["speed_kmh"] = float(m.group(1).replace(",", "."))
     elif (m := _PACE.search(text)):
         pace = int(m.group(1)) + int(m.group(2)) / 60
-        n["speed_kmh"] = round(60 / pace, 1) if pace else None
-    if n.get("speed_kmh") is not None and not validate_speed(n["speed_kmh"]):
-        del n["speed_kmh"]                              # fuori dal Constraint Gate -> scartata
+        #velocità=pace/60
+        n["speed_kmh"] = round(60 / pace, 1) if pace else None      
     if (m := _DIST.search(text)):
         n["distance_km"] = float(m.group(1).replace(",", "."))
     if (m := _DUR.search(text)):
@@ -125,30 +142,47 @@ def parse_numbers(text: str) -> dict:
     return n
 
 
-# velocità dichiarata -> cadenza (spm) -> BPM target. BPM = cadenza (entrainment 1:1,
-# Van Dyck 2015). Regressione clampata alla cadenza naturale di corsa 150-190. (invariato)
+#  i seguenti parametri sono ricavati dal paper di Van Dyck del 2015.
+#  calcolati attraverso una regressione lineare (x=velocità, y=cadenza)
+
 _CAD_INTERCEPT, _CAD_SLOPE, _CAD_MIN, _CAD_MAX = 134.0, 2.9, 150.0, 190.0
 
 
+#  la seguente funzione ricava dalla velocità i BPM target 
+
 def bpm_from_speed(speed_kmh: float) -> int:
-    """Velocità (km/h) -> BPM desiderato (calcolo 'chirurgico', regime quantitativo)."""
     return round(min(_CAD_MAX, max(_CAD_MIN, _CAD_INTERCEPT + _CAD_SLOPE * speed_kmh)))
 
 
+#  funzione principale che coordina tutte le operazioni
+
 def route(text: str) -> dict:
-    """Frase -> {goal, mood, numbers, target_bpm, params}.
 
-    Doppio regime (identico ad AlgoRun): se la velocità è dichiarata (quantitativo),
-    `target_bpm` è il BPM 'chirurgico' dalla cadenza; altrimenti None e comanda la banda
-    di `params` (qualitativo). `goal` = parole-chiave se presenti, altrimenti SetFit.
-    """
+    #estrae goal, prima prova a vedere se è presente nel dizionario, sennò applica SetFit
     goal = goal_from_keywords(text) or predict_goal(text)
+    
+    #estrae mood tramite SetFit
     mood = predict_mood(text)
-    numbers = parse_numbers(text)
-    target_bpm = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None
-    return {"goal": goal, "mood": mood, "numbers": numbers,
-            "target_bpm": target_bpm, "params": GOAL_PARAMS[goal]}
 
+    #estrae (speed_kmh, distance_km, duration_min)
+    numbers = parse_numbers(text)
+
+    #viene validata la velocità tramite l'ontologia
+    if numbers.get("speed_kmh") is not None:
+        if not validate_speed(numbers["speed_kmh"]):
+            numbers.pop("speed_kmh")
+
+    #se esiste speed_kmh si ricava i BPM target
+    target_bpm = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None
+    
+    return {"goal": goal, "mood": mood, "numbers": numbers,
+            "target_bpm": target_bpm, "params": GOAL_PARAMS[goal]}   #in base al goal vengono recuperati parametri
+                                                                     #(banda BPM, energy, pesi, tau)
+
+
+
+
+# simulazione 
 
 if __name__ == "__main__":
     import sys

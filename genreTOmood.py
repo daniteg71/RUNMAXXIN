@@ -1,26 +1,44 @@
-"""Mood -> generi musicali: DIZIONARIO Python, non un'ontologia.
+#  il seguente codice, dato il mood dell'utente dall' NLP intent.py (intent.predict_mood),
+#  restituisce i generi musicali fra cui scegliere le canzoni (quando non c'è un BPM target)
 
-Prima era un file OWL letto a regex — funzionalmente era già un dizionario (nessuna
-query, nessuna inferenza, nessun reasoner), solo scritto in un formato più complicato.
-Qui è dichiarato per quello che è. La regola resta quella teorica (Russell 1980,
-valenza x arousal; Karageorghis & Terry 2009, arousal per famiglia di generi): non è
-dedotta dalle statistiche del catalogo. `songs.csv` fornisce solo l'elenco dei generi
-esistenti; le associazioni mood<->genere vengono dagli archetipi qui sotto.
 
-Dato il mood dell'utente (dallo stadio NLP, `intent.predict_mood`), restituisce i generi
-candidati fra cui il recommender sceglie le canzoni quando NON c'è un BPM target 'chirurgico'.
-"""
+#  il codice nel complesso lavora in questo modo:
+
+#  mood previsto dal modulo NLP
+#          ↓
+#  generi musicali compatibili
+#          ↓
+#  lista di generi passata al controller/recommender
+
+
+#  il criterio di associazione mood → genere musicale segue la regola 
+#  teorica ricavata dagli studi di Karageorghis & Terry nel 2009
+
+
+
+
+#  vengono utilizzate le librerie:
+#    - annotations per usare annotazioni di tipo più flessibili
+#    - csv per leggere il dataset songs.csv
+#    - path per costruire i percorsi delle cartelle contenenti i modelli
+
 from __future__ import annotations
-
 import csv
 from pathlib import Path
 
+
+
+#lista mood disponibili
 MOODS = ["Neutral", "Focused", "Energetic", "Motivated", "Calm"]
+
+#path dataset canzoni
 SONGS_CSV = Path(__file__).parent / "songs.csv"
 
-# archetipo -> (parole-chiave nel nome del genere, mood associati). Il PRIMO archetipo
-# che combacia vince. Fonte: Russell 1980 (piano valenza x arousal) + Karageorghis &
-# Terry 2009 (arousal per famiglia musicale) -- regola teorica, non statistica.
+
+#  la parte centrale del file verte sugli archetipi, ovvero famiglie musicali caratterizzate da 
+#  un certo livello di arousal (gradi di attivazione) e valence(positività/negatività emotiva)
+#  ogni archetipo contiene 3 elementi (nome/parole chiave dei generi/mood associati)
+
 ARCHETYPES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
     ("low_arousal_calm",                                       # bassa attivazione, valenza serena
      ("ambient", "classical", "piano", "sleep", "new-age", "chill", "acoustic", "jazz",
@@ -47,8 +65,11 @@ ARCHETYPES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
 DEFAULT_MOODS = ("Neutral", "Focused")   # generi non archetipici (lingue, comedy, kids, ...)
 
 
+
+#  la seguente funzione riceve il nome di un genere in input e restituisce mood associati
+#  secondo la regola teorica di Russell/Karageorghis
+
 def _classify_genre(genre: str) -> tuple[str, ...]:
-    """Regola teorica genere -> mood (via archetipo di Russell/Karageorghis)."""
     low = genre.lower()
     for _name, keywords, moods in ARCHETYPES:
         if any(k in low for k in keywords):
@@ -56,8 +77,10 @@ def _classify_genre(genre: str) -> tuple[str, ...]:
     return DEFAULT_MOODS
 
 
+#  la seguente funzione legge i generi effettivamente presenti nel
+#  dataset delle canzoni utilizzato (songs.csv)
+
 def _catalog_genres() -> list[str]:
-    """Legge dal CSV SOLO l'elenco dei generi esistenti (non le associazioni mood)."""
     genres: set[str] = set()
     with open(SONGS_CSV, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -67,27 +90,33 @@ def _catalog_genres() -> list[str]:
     return sorted(genres)
 
 
+#  la seguente funzione costruisce il mapping completo genere → mood associati
+#  restituisce genere, mood dominante legato a quel genere, lista di tutti i mood associati
+
 def _build() -> dict[str, dict]:
     return {g: {"dominant": _classify_genre(g)[0], "moods": list(_classify_genre(g))}
             for g in _catalog_genres()}
 
 
-GENRE_TO_MOODS: dict[str, dict] = _build()   # calcolato una volta all'import
+#riga eseguita quando il file viene importato
+GENRE_TO_MOODS: dict[str, dict] = _build()   
 
 
+#  la seguente funzione restituisce la lista di generi associati al mood richiesto
 def genres_for_mood(mood: str) -> list[str]:
-    """Tutti i generi associati al mood dato (dalla regola teorica)."""
     return sorted(g for g, info in GENRE_TO_MOODS.items() if mood in info["moods"])
 
 
+#  la seguente funzione restituisce i generi nei quali il mood in input è dominante
 def dominant_genres_for_mood(mood: str) -> list[str]:
-    """Solo i generi il cui mood DOMINANTE è quello dato (segnale più forte)."""
     return sorted(g for g, info in GENRE_TO_MOODS.items() if info["dominant"] == mood)
 
 
+#  la seguente funzione restituisce la lista di mood a cui il genere è associato
 def moods_for_genre(genre: str) -> list[str]:
-    """I mood a cui un genere è associato."""
     return list(GENRE_TO_MOODS.get(genre, {}).get("moods", []))
+
+
 
 
 if __name__ == "__main__":

@@ -1,73 +1,92 @@
-"""Controller di RUNMAXXIN: genera il VETTORE TARGET per il recommender.
+#  il seguente codice rappresnta il core del progetto: prende l'output del modulo NLP e lo 
+#  stato corrente rilevato dai sensori, li fonde e costruisce il target che verrà passato al recommender
 
-Il recommender (collega) riceve un target e assegna a ogni canzone una probabilita' in base
-alla DISTANZA dal target. Questo file produce quel target, fondendo:
-  - le feature del prompt iniziale (intent.route: goal, mood, target_bpm, params)
-  - i dati che arrivano dai sensori (physiological_state: mean_hrr, effort_state, trend_state)
 
-Regole teoriche:
-  - QUANTITATIVO (velocita' dichiarata): target stretto attorno al bpm calcolato (Van Dyck),
-    tau basso -> exploit (resta preciso).
-  - QUALITATIVO: range piu' largo, generi ristretti al mood (genre_mood), tau piu' alto ->
-    explore (variabilita' musicale; softmax di Sutton & Barto).
-  - CONSAPEVOLE DEL TIPO: su IntenseRun/ripetute alterna veloce/lento rispetto alla canzone
-    precedente (se l'ultima era veloce, punta piu' lento).
-  - Il cuore comanda: safety override a HRR alta -> vettore di recupero. La soglia non
-    e' una costante Python: e' un dato dichiarato nell'ontologia (ontology/runner_state.owl,
-    ar:CriticalState ar:hasThreshold), e la classificazione la fa una query SPARQL
-    (symbolic.is_critical_state) -- non un confronto scritto a mano qui.
 
-Funzione pura, nessun loop, nessun recommender: solo decide() -> Target.
-"""
+#  vengono utilizzate le librerie:
+#    - annotations per usare annotazioni di tipo più flessibili
+#    - dataclasses per creare classe target, convertire target in dizionario
+#    - intent per recuperare parametri associati a (EasyRun/ModerateRun/IntenseRun), collegare goal a bande fisiologiche, stimare BPM da velocità
+#    - genre_mood per recuperare generi compatibili con il mood
+#    - symbolic per verificare tramite componente simbolica e ontologia se lo stato cardiaco è critico
+
+
 from __future__ import annotations
-
-from dataclasses import asdict, dataclass, field
-
+from dataclasses import asdict, dataclass
 from intent import GOAL_PARAMS, GOAL_TO_EFFORT, bpm_from_speed
 from genre_mood import genres_for_mood
 from symbolic import is_critical_state
 
-# --- costanti (design -> ablation, vedi docs/THEORY.md) ---
-NARROW = 5.0             # raggio bpm stretto (regime quantitativo): +/- 5 bpm
-TAU_EXPLOIT = 0.2        # temperatura bassa = sfrutta (preciso); alta = esplora (varia)
-CALM = 0.7               # fattore "calmati" (dici easy ma sali)
-PUSH = 1.2               # fattore "spingi"  (dici intense ma vai piano)
-RECOVERY_BPM = GOAL_PARAMS["EasyRun"]["bpm"][0]   # in recupero scendi sempre a ~banda facile
-WARMUP_MIN = 5.0         # riscaldamento: i primi minuti parti basso e sali fino al target
-ENTRAIN_MIN, ENTRAIN_MAX = 150.0, 190.0   # banda naturale di cadenza (Van Dyck): il target la insegue
-VAR_DELTA = 8.0          # ampiezza dell'alternanza veloce/lento sulle ripetute (attorno al bpm live)
 
-# mood -> valenza target (Russell 1980; arousal/positivita' della musica)
+#nel regime quantitativo si cercano canzoni entro una banda di +/- 5 BPM
+NARROW = 5.0             
+
+#nel reccomender la temperatura (tau) basse del softmax assegna probabilità molto alta a canzoni vicine. (explotation vs exploration)
+TAU_EXPLOIT = 0.2
+
+#quando utente chiede corsa facile ma sensori rilevano sforzo alto, l'energia viene moltiplicata per fattore 0.7
+CALM = 0.7
+
+#quando utente chiede corsa intensa ma sensori rilevano sforzo basso, l'energia viene moltiplicata per fattore 1.2
+PUSH = 1.2
+
+#durante recupero imposta BPM minimo dell'intervallo di BPM nell'allenamento EasyRun
+RECOVERY_BPM = GOAL_PARAMS["EasyRun"]["bpm"][0]
+
+#durata del warmup
+WARMUP_MIN = 5.0         
+
+#valori limite del BPM target
+ENTRAIN_MIN, ENTRAIN_MAX = 150.0, 190.0
+
+#nelle IntenseRun qualitative, il BPM target viene aumentato o diminuito di 8 (es. scatto-stop ripetuto)
+VAR_DELTA = 8.0
+
+#dizionario che mappa mood→target valence (secondo paper di Russell 1980 "arousal/positivita' della musica")
 VALENCE_BY_MOOD = {"Energetic": 0.75, "Motivated": 0.70, "Focused": 0.45,
                    "Neutral": 0.50, "Calm": 0.25}
 
 
+
+#classe contenente tutti i parametri necessari per il recommender
+
 @dataclass
 class Target:
-    """Vettore target + metadati che il recommender consuma."""
+    #3 parametri del target vector, vengono poi confrontati con le canzoni
     bpm: float
     energy: float
     valence: float
-    weights: dict            # peso per dimensione nella distanza
-    bpm_tolerance: float     # raggio attorno al bpm (stretto/largo)
-    genres: list             # generi ammessi (vuoto = nessun filtro)
-    tau: float               # temperatura exploration/exploitation del softmax
+
+    #dizionario contenente il peso da associare ad ogni parametro del target vector
+    weights: dict
+
+    #valore che indica tolleranza tra BPM target e BPM canzone
+    bpm_tolerance: float
+
+    #generi ammessi
+    genres: list
+
+    #temperatura exploration/exploitation del softmax
+    tau: float  
+
     mood: str
     goal: str
     effort_band: tuple       # classi matches_effort ammesse
     recovery: bool
     regime: str              # "quantitative" | "qualitative" | "recovery"
 
+
+#  la seguente funzione converte il target nel vettore [BPM, energy, valence]
     def as_vector(self) -> list:
-        """Il punto nello spazio delle canzoni: [bpm, energy, valence]."""
         return [self.bpm, self.energy, self.valence]
 
+#  la seguente funzione converte il target in un dizionario
     def to_dict(self) -> dict:
         return asdict(self)
 
 
+#  la seguente funzione serve per leggere un campo da PhysiologicalAnalysis
 def _get(analysis, key, default=None):
-    """Legge un campo da PhysiologicalAnalysis (attributo) o da un dict finestra."""
     if analysis is None:
         return default
     if isinstance(analysis, dict):
@@ -75,21 +94,16 @@ def _get(analysis, key, default=None):
     return getattr(analysis, key, default)
 
 
+#  la seguente funzione limita un valore a un intervallo
 def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+#  la seguente funzione indica il BPM che andrebbe seguito durante la corsa
+#  per calcolarla si utilizza la cadenza misurata direttamente dal sensore
+#  sennò la ricaviamo attraverso la velocità misurata
+
 def live_entrainment_bpm(analysis) -> float | None:
-    """BPM che INSEGUE la corsa reale, di momento in momento (entrainment di Van Dyck, continuo).
-
-    UNICO punto di verità per "la musica segue la velocità": preferisce la **cadenza misurata**
-    (1:1 coi passi, la cosa che il beat deve inseguire); in mancanza la stima dalla **velocità**
-    con `bpm_from_speed` (134 + 2.9·v). Ritorna None se non c'è segnale (cold start) -> il
-    chiamante ripiega sul centro-banda del tipo.
-
-    Chiunque voglia "far seguire il bpm alla velocità" chiama QUESTA — così la logica non è
-    duplicata: cambiarla qui la cambia ovunque (controller, tester, loop).
-    """
     cadence = _get(analysis, "mean_cadence_spm")
     if cadence is not None and float(cadence) > 0:
         return _clamp(float(cadence), ENTRAIN_MIN, ENTRAIN_MAX)     # cadenza misurata, 1:1
@@ -99,28 +113,42 @@ def live_entrainment_bpm(analysis) -> float | None:
     return None
 
 
+#  funzione centrale, riceve: il dizionario intent contenente i parametri ricavati dalla frase dekll'utente in intent.py,
+#  il dizionario analysis contenente i parametri rilevati dal sensore nel file physiological_state.py,
+#  il BPM dell'ultima canzone riprodotto (last_bpm), i minuti trascorsi dall'inizio dell'allenamento (elapsed_min).
+#  in base alla logica descritta genera il vettore target
+
 def decide(intent: dict, analysis=None, last_bpm: float | None = None,
            elapsed_min: float | None = None) -> Target:
-    """Frase (intent) + stato sensori (analysis) -> vettore Target per il recommender.
 
-    `analysis` None = cold start (nessun sensore ancora). `last_bpm` = bpm della canzone
-    precedente (variazione veloce/lento su IntenseRun). `elapsed_min` = minuti dall'inizio:
-    nei primi WARMUP_MIN il target sale gradualmente da basso al valore previsto (riscaldamento).
-    """
+    #goal ricavato dalla frase tramite NLP
     goal = intent.get("goal") or "ModerateRun"
+
+    #mood ricavato dalla frase tramite NLP
     mood = intent.get("mood") or "Neutral"
+
+    #in base al goal si ricavano i parametri (banda BPM, energy, pesi, tau)
     params = intent.get("params") or GOAL_PARAMS[goal]
+    
+    #lower & upper bound dei BPM associati alla corsa desiderata
     lo, hi = params["bpm"]
+
+    #BPM target ricavati dalla frase attreverso NLP
     target_bpm = intent.get("target_bpm")
+
+    #se siamo riusciti a ricavare i BPM target, allora il regime è quantitativo
     quantitative = target_bpm is not None
 
+    #recuperiamo parametri ricavati dallo stato fisiologico
     mean_hrr = _get(analysis, "mean_hrr")
     effort = _get(analysis, "effort_state")
     trend = _get(analysis, "trend_state")
 
-    # 1) SAFETY OVERRIDE: il cuore vince su tutto -> recupero.
-    # La soglia la dichiara l'ontologia, la classificazione la fa una query SPARQL
-    # (symbolic.is_critical_state) -- non un confronto Python scritto a mano.
+
+    #  prima di procedere si effettua un safety override, ovvero si da priorità ai dati cardiaci
+    #  viene passato l'HRR medio della finestra all'ontologia, se lo stato è critico si entra subito 
+    #  in modalità recovery rallentando l'allenamento il più possibile
+
     if mean_hrr is not None and is_critical_state(mean_hrr):
         return Target(bpm=float(RECOVERY_BPM), energy=min(params["energy"], 0.30), valence=0.25,
                       weights={"bpm": 0.8, "energy": 0.15, "valence": 0.05},
@@ -128,17 +156,18 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
                       mood=mood, goal=goal, effort_band=("LowEffort", "TargetEffort"),
                       recovery=True, regime="recovery")
 
-    # 2) regime -> bpm base, raggio, tau, generi, pesi
+    
+    #  se il regime è quantitativo si settano i seguenti parametri con i seguenti pesi
     if quantitative:
         bpm = float(target_bpm)
         tol = NARROW
         tau = TAU_EXPLOIT
         genres: list = []
         weights = {"bpm": 0.8, "energy": 0.15, "valence": 0.05}
+    
+    
+    #  se invece è qualitativo il BPM segue la velocità reale del momento
     else:
-        # QUALITATIVO: il BPM INSEGUE la velocità reale del momento (entrainment continuo).
-        # Prima era il centro-banda fisso del tipo; ora segue quanto stai andando davvero
-        # (cadenza/velocità dai sensori). Se non c'è ancora segnale (cold start) ripiega sulla banda.
         live = live_entrainment_bpm(analysis)
         bpm = live if live is not None else (lo + hi) / 2
         tol = (hi - lo) / 2
@@ -148,45 +177,58 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
                    "energy": round(params["w_mood"] * 0.6, 3),
                    "valence": round(params["w_mood"] * 0.4, 3)}
 
+    #energy ricavata dai parametri legati al goal
     energy = params["energy"]
 
-    # 3) fusione sensori: goal x effort
+    # in questa sezione viene fatta la fusione tra goal ed effort
+    # il target viene adattato allo stato reale del corpo
+
     if effort is not None:
+        #se EasyRun ma sforzo alto, viene ridotta l'energy e spostato il BPM verso lower bound
         if goal == "EasyRun" and effort in ("HighEffort", "VeryHighEffort"):
             energy *= CALM
-            bpm = lo + (bpm - lo) * 0.5                       # scendi verso banda bassa
+            bpm = lo + (bpm - lo) * 0.5                       
+        
+        #se IntenseRun ma sforzo basso, aumento energy e sposto BPM verso upper bound
         elif goal == "IntenseRun" and effort == "LowEffort":
             energy = min(1.0, energy * PUSH)
-            bpm = bpm + (hi - bpm) * 0.5                      # sali verso banda alta
+            bpm = bpm + (hi - bpm) * 0.5                      
+        
+        #se ModerateRun ma sforzo basso aumento enrgia e BPM
+        #sennò se sforzo alto le abbasso
         elif goal == "ModerateRun":
             if effort == "LowEffort":
                 energy = min(1.0, energy * 1.1); bpm = min(hi, bpm + 3)
             elif effort in ("HighEffort", "VeryHighEffort"):
                 energy *= 0.9; bpm = max(lo, bpm - 3)
-        # rifinitura trend (leggera): se sali ed sei gia' alto, non spingere oltre
+        
+        #se trend Increasing e sforzo alto/molto alto, riporta l'energy al valore del goal
         if trend == "Increasing" and effort in ("HighEffort", "VeryHighEffort"):
             energy = min(energy, params["energy"])
 
-    # 4) variazione per tipo (ripetute, solo qualitativo): alterna veloce/lento ATTORNO al
-    # bpm live (non piu' agli estremi fissi della banda), cosi' continua a seguire la velocita'.
+
+    #se IntenseRun qualitativa, se BPM attuale è minore del BPM precedente, aumento BPM target, sennò diminuisco
+    #l'obbiettivo è di alternare fase veloce-moderata
     if goal == "IntenseRun" and last_bpm is not None and not quantitative:
         bpm = bpm - VAR_DELTA if last_bpm >= bpm else bpm + VAR_DELTA
-        bpm = _clamp(bpm, ENTRAIN_MIN, ENTRAIN_MAX)          # resta nella cadenza naturale (Van Dyck)
-        tol = NARROW                                         # punta preciso l'estremo scelto
+        bpm = _clamp(bpm, ENTRAIN_MIN, ENTRAIN_MAX)          
+        tol = NARROW                                         
 
-    # 5) riscaldamento: nei primi minuti parti basso e sali fino al target previsto
+    #fase di riscaldamento: nei primi minuti parti basso e sali fino al target previsto
+    #si specifica regime, si aumenta lentamente il BPM e l'energia
     regime = "quantitative" if quantitative else "qualitative"
     if elapsed_min is not None and elapsed_min < WARMUP_MIN:
-        f = max(0.0, elapsed_min) / WARMUP_MIN          # 0 -> parti da fermo, 1 -> a regime
+        f = max(0.0, elapsed_min) / WARMUP_MIN
         bpm = RECOVERY_BPM + (bpm - RECOVERY_BPM) * f
         energy = 0.20 + (energy - 0.20) * f
         regime = "warmup"
 
-    # 6) riempimento + clamp. effort_band coerente col target REALE: nel riscaldamento la
-    # musica è calma, quindi la banda ammessa è bassa (non quella nominale del tipo) -> altrimenti
-    # il gate di sforzo non troverebbe mai canzoni compatibili durante il warm-up.
+
+    #nel warmup si accettano canzoni associate a LowEffort/TargetEffort anche se il goal fosse IntenseRun
     effort_band = ("LowEffort", "TargetEffort") if regime == "warmup" else GOAL_TO_EFFORT[goal]
     valence = VALENCE_BY_MOOD.get(mood, 0.5)
+    
+    #creazione target finale
     return Target(bpm=round(_clamp(bpm, 80, 200), 1),
                   energy=round(_clamp(energy, 0.0, 1.0), 3),
                   valence=valence, weights=weights, bpm_tolerance=round(tol, 1),
@@ -194,6 +236,11 @@ def decide(intent: dict, analysis=None, last_bpm: float | None = None,
                   effort_band=effort_band, recovery=False, regime=regime)
 
 
+
+
+
+
+# simulazione
 def _demo() -> None:
     def show(titolo, t: Target):
         print(f"\n== {titolo} ==")
