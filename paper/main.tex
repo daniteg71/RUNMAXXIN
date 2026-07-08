@@ -107,79 +107,97 @@
 
 	\subsection{Dataset}
 
-	% [TO WRITE + Table~\ref{tab:dataset}: NLP few-shot examples (per-class counts, held-out
-	% split); song catalogue (Spotify audio features, ~89,500 tracks); simulated physiological
-	% sessions. What is used as-is vs. built by us; limitations/biases.]
+	Two natural-language datasets were written by the authors, one per classifier. The \emph{goal} dataset has three classes (EasyRun, ModerateRun, IntenseRun); the \emph{mood} dataset has five (Neutral, Focused, Energetic, Motivated, Calm). Inputs are short free-text prompts ($\leq 20$ words). Following the few-shot protocol we keep no validation set, and the held-out test sentences are disjoint from training (verified programmatically). Table~\ref{tab:dataset} summarises the splits. Two further resources are used as provided, not modified: a catalogue of 89{,}503 Spotify tracks with audio features (tempo, energy, valence, genre), and six simulated physiological sessions (heart rate, speed, cadence) rather than real recordings. Preprocessing is lightweight: lowercasing and regular-expression number extraction for text; numeric coercion, range filtering and de-duplication for the catalogue. The main biases are the small size of the hand-written NLP sets, the simulated (not measured) physiology, and duplicate tracks in the catalogue.
 
 	\begin{table}[h]
 		\centering
-		\caption{Dataset summary.}
+		\caption{Dataset summary. The two NLP datasets are evaluated; the catalogue is used as provided.}
 		\label{tab:dataset}
-		\begin{tabular}{|l|c|}
+		\begin{tabular}{|l|c|c|c|c|}
 			\hline
-			\textbf{Property} & \textbf{Value} \\
+			\textbf{Dataset} & \textbf{Classes} & \textbf{Train} & \textbf{Test} & \textbf{Input} \\
 			\hline
-			Dataset name & XXXX \\
-			Number of samples & XXXX \\
-			Number of classes & XX \\
-			Training samples & XXXX \\
-			Validation samples & XXXX \\
-			Test samples & XXXX \\
-			Input format & XXXX \\
+			Goal (intent) & 3 & 46 & 36 & free text \\
+			Mood (intent) & 5 & 55 & 40 & free text \\
+			Song catalogue & -- & 89{,}503 & -- & audio features \\
 			\hline
 		\end{tabular}
 	\end{table}
 
 	\subsection{Training and Evaluation Protocol}
 
-	% [TO WRITE + Table~\ref{tab:training}: hardware/software; SetFit framework; encoder
-	% paraphrase-multilingual-MiniLM-L12-v2; batch size, epochs; contrastive loss; metrics
-	% (accuracy, macro-F1); baseline (keyword rule); fair-comparison procedure.]
+	Both classifiers use SetFit with the \texttt{paraphrase-multilingual-MiniLM-L12-v2} sentence encoder, contrastively fine-tuned on sentence pairs and topped with a logistic classification head, trained on a MacBook~M2 in minutes (Table~\ref{tab:training}). We evaluate on the held-out test set with accuracy and macro-averaged F1, and compare against a deterministic keyword-rule baseline (an ablation isolating the contribution of the learned model). The same test sentences and metrics are used for both methods to keep the comparison fair. The rest of the pipeline (controller, recommender, symbolic layer) is rule- or query-based and requires no training.
 
 	\begin{table}[h]
 		\centering
-		\caption{Training configuration.}
+		\caption{Training configuration (both SetFit classifiers).}
 		\label{tab:training}
 		\begin{tabular}{|l|c|}
 			\hline
 			\textbf{Parameter} & \textbf{Value} \\
 			\hline
-			Framework & XXXX \\
-			Optimizer & XXXX \\
-			Learning rate & XXXX \\
-			Batch size & XXXX \\
-			Epochs & XXXX \\
-			Loss function & XXXX \\
-			Main metric & XXXX \\
+			Framework & SetFit (Sentence-Transformers) \\
+			Encoder & MiniLM-L12 (multilingual) \\
+			Optimizer & AdamW (SetFit default) \\
+			Learning rate & $2\times10^{-5}$ (default) \\
+			Batch size & 16 \\
+			Epochs & 1 \\
+			Loss function & contrastive (cosine pairs) \\
+			Main metric & accuracy / macro-F1 \\
 			\hline
 		\end{tabular}
 	\end{table}
 
 	\subsection{Results}
 
-	% [TO WRITE + Table~\ref{tab:results}: SetFit vs. keyword baseline (goal 0.83 vs 0.75);
-	% mood results; confusion matrices; inference latency 16 ms; effort-gate safety-violation
-	% rate (16.7% before, after correction); playlist diversity before/after sampling fix.]
+	On goal classification the few-shot model reaches $0.778$ accuracy against $0.556$ for the keyword baseline, a $22$-point margin (Fig.~\ref{fig:acc}). The gain is not uniform across classes: per-class F1 (Fig.~\ref{fig:f1}) is $0.87$ for ModerateRun and $0.77$ for EasyRun, but only $0.67$ for IntenseRun, whose recall is $0.50$. On mood the model reaches $0.800$ accuracy (macro-F1 $0.81$). The confusion matrices (Figs.~\ref{fig:cmgoal} and~\ref{fig:cmmood}) localise two systematic errors: intense prompts phrased without technical vocabulary are read as EasyRun, and uncertain mood prompts collapse onto Neutral. Table~\ref{tab:results} reports the aggregate figures, including the macro-F1 and the average intent-extraction latency ($16$~ms), which the plots do not show.
 
 	\begin{table}[h]
 		\centering
-		\caption{Comparison between baseline and proposed approach.}
+		\caption{Aggregate comparison. Accuracy and macro-F1 on the held-out set, with mean intent-extraction latency; complements Figs.~\ref{fig:acc}--\ref{fig:cmmood}.}
 		\label{tab:results}
 		\begin{tabular}{|l|c|c|c|}
 			\hline
-			\textbf{Method} & \textbf{Metric 1} & \textbf{Metric 2} & \textbf{Time} \\
+			\textbf{Method (task)} & \textbf{Acc.} & \textbf{Macro-F1} & \textbf{Latency} \\
 			\hline
-			Baseline & XX & XX & XX \\
-			Proposed method & XX & XX & XX \\
+			Keyword baseline (goal) & 0.556 & 0.534 & $<1$~ms \\
+			SetFit (goal) & \textbf{0.778} & \textbf{0.77} & 16~ms \\
+			SetFit (mood) & \textbf{0.800} & \textbf{0.81} & 16~ms \\
 			\hline
 		\end{tabular}
 	\end{table}
 
+	\begin{figure}[t]
+		\centering
+		\includegraphics[width=0.60\textwidth]{figures/fig_accuracy_baseline.png}
+		\caption{Goal classification accuracy: the keyword baseline versus the few-shot SetFit classifier on the held-out test set.}
+		\label{fig:acc}
+	\end{figure}
+
+	\begin{figure}[t]
+		\centering
+		\includegraphics[width=0.62\textwidth]{figures/fig_goal_f1_per_class.png}
+		\caption{Per-class F1 for goal classification. IntenseRun (red) is the weakest class, driven by low recall.}
+		\label{fig:f1}
+	\end{figure}
+
+	\begin{figure}[t]
+		\centering
+		\includegraphics[width=0.60\textwidth]{figures/fig_confusion_goal.png}
+		\caption{Goal confusion matrix: intense prompts without race vocabulary are misread as EasyRun.}
+		\label{fig:cmgoal}
+	\end{figure}
+
+	\begin{figure}[t]
+		\centering
+		\includegraphics[width=0.68\textwidth]{figures/fig_confusion_mood.png}
+		\caption{Mood confusion matrix: uncertain prompts fall back onto Neutral, costing recall on Motivated and Focused.}
+		\label{fig:cmmood}
+	\end{figure}
+
 	\subsection{Critical Discussion}
 
-	% [TO WRITE: which method wins and why; did the correction produce a real benefit; hardest
-	% classes (IntenseRun recall); where the system fails; coherence with related work; main
-	% limitations (few-shot data, simulated sessions); future work.]
+	The few-shot classifier clearly outperforms the rule-based baseline, and the margin \emph{widens} on the larger, harder test set (from a handful of examples to $36$/$40$ per task, the goal gap grows to $22$ points). This supports the contribution stated in the introduction: the learned model generalises to phrasings the keyword rules miss, which is exactly why we preferred it over both a rule baseline and a heavier fine-tuned transformer. The hardest case is IntenseRun: effort expressed without race vocabulary (``give everything until I collapse'') is read as easy, because the training set under-represents jargon-free intensity; the confusion matrix isolates this failure. On mood, the model's tendency to fall back on Neutral when unsure lowers recall on Motivated and Focused. These outcomes are coherent with the few-shot literature: strong from little data, fragile out of distribution. The main limitations are the small NLP datasets, the simulated physiological sessions, and catalogue duplicates; the clearest improvement is to enlarge and balance the training data, especially jargon-free intense and mood examples, which our error analysis identifies as the dominant error source.
 
 	\section{Conclusion}
 
