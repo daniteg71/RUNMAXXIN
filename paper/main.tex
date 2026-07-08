@@ -45,7 +45,7 @@
 	\maketitle
 
 	\begin{abstract}
-		This report introduces RUNMAXXIN, a neuro-symbolic Cyber-Physical System for real-time music recommendation during running. Traditional systems rely on static playlisting, failing to adapt to the runner's physiological state. We propose a closed-loop architecture that fuses NLP-based intent extraction with real-time biometric analysis. Using a compact SetFit few-shot classifier for NLP and a lightweight symbolic layer -- encoded as an explicit, queryable knowledge base rather than application logic -- for decision-making, the system dynamically maps user goals to optimal acoustic targets (BPM, Energy, Valence). A safety-critical controller enforces deterministic overrides, forcing recovery tracks when biometric thresholds (HRR $>$ 90\%) are exceeded. Validated on simulated session logs, the system achieves an F1-score of 0.82 for training-goal classification and an average inference latency of 16~ms, demonstrating an efficient, safety-aware paradigm for edge-deployed athletic support.
+		RUNMAXXIN is a system that chooses the music a runner hears, moment by moment, so that the run itself -- not the phone -- stays in focus. The problem it addresses is that a runner's musical needs change continuously with two things that often disagree: what the runner set out to do, and what their body is actually doing. The system reads a short natural-language prompt to capture the runner's goal and mood, and at the same time interprets heart rate and cadence to estimate real effort. A controller fuses these two sources into an acoustic target -- a tempo, an energy level, and an emotional tone -- and a recommender selects songs that match it. Around this statistical core, an explicit symbolic layer enforces the rules that must always hold, most importantly steering the music toward recovery when the runner's heart is overworked. The result is a hands-free, safety-aware musical companion that adapts to both intention and physiology.
 	\end{abstract}
 
 	\noindent\textbf{Keywords:} natural language processing; physiological sensors; ontology; recommendation systems; sport.
@@ -70,8 +70,7 @@
 
 	\begin{figure}[t]
 		\centering
-		\figplaceholder{0.95\textwidth}{3cm}
-		% \includegraphics[width=0.95\textwidth]{figures/setfit-architecture.png}
+		\includegraphics[width=0.95\textwidth]{figures/setfit-architecture.png}
 		\caption{The SetFit training scheme: contrastive fine-tuning of a Sentence Transformer on few-shot sentence pairs, followed by training a lightweight classification head on the resulting embeddings. Adapted from Tunstall et al.~\cite{tunstall2022setfit}.}
 		\label{fig:setfit-arch}
 	\end{figure}
@@ -80,8 +79,7 @@
 
 	\begin{figure}[t]
 		\centering
-		\figplaceholder{0.62\textwidth}{4.5cm}
-		% \includegraphics[width=0.62\textwidth]{figures/setfit-fewshot-cr.png}
+		\includegraphics[width=0.62\textwidth]{figures/setfit-fewshot-cr.png}
 		\caption{In the low-data regime, SetFit reaches high accuracy from a handful of labeled examples per class, where fine-tuning a large transformer (RoBERTa-large) still lags. Adapted from Tunstall et al.~\cite{tunstall2022setfit}.}
 		\label{fig:setfit-cr}
 	\end{figure}
