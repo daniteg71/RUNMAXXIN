@@ -62,6 +62,34 @@ GOAL_TEST = [
     ("oggi do' tutto me stesso fino a crollare", "IntenseRun"),
     ("una corsa serena e senza pensieri", "EasyRun"),
     ("tengo un buon ritmo regolare per un bel po'", "ModerateRun"),
+
+    # test set ampliato (frasi tenute fuori, distinte dal training) -> stime piu' affidabili
+    ("oggi solo due passi lenti per staccare", "EasyRun"),
+    ("corro pianissimo, giusto per muovermi", "EasyRun"),
+    ("un giretto morbido senza affanno", "EasyRun"),
+    ("niente fatica, oggi gambe leggere", "EasyRun"),
+    ("corsa dolce per smaltire la stanchezza", "EasyRun"),
+    ("vado con calma, respiro tranquillo", "EasyRun"),
+    ("oggi mi risparmio, ritmo blando", "EasyRun"),
+    ("passo lento, mi godo il paesaggio", "EasyRun"),
+
+    ("oggi tengo un ritmo sostenuto ma controllato", "ModerateRun"),
+    ("quindici chilometri a passo costante", "ModerateRun"),
+    ("corsa lunga a velocità regolare", "ModerateRun"),
+    ("spingo moderato per tutta l'ora", "ModerateRun"),
+    ("ritmo gara tranquillo, senza esagerare", "ModerateRun"),
+    ("fondo medio con le gambe che girano bene", "ModerateRun"),
+    ("sessanta minuti a velocità di crociera", "ModerateRun"),
+    ("vado deciso ma senza andare in debito", "ModerateRun"),
+
+    ("otto ripetute da mille tirate", "IntenseRun"),
+    ("oggi si spacca, tutto quello che ho", "IntenseRun"),
+    ("scatti brucianti fino a non respirare", "IntenseRun"),
+    ("prove veloci corte con poco recupero", "IntenseRun"),
+    ("oggi voglio vomitare dalla fatica", "IntenseRun"),
+    ("accelerazioni durissime una dietro l'altra", "IntenseRun"),
+    ("mi svuoto completamente, senza pietà", "IntenseRun"),
+    ("serie di sprint a manetta", "IntenseRun"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -110,6 +138,42 @@ MOOD_TEST = [
     ("che carica, sono gasato oggi", "Energetic"), ("pieno di energia e adrenalina", "Energetic"),
     ("voglia di spingere e superarmi", "Motivated"), ("determinato a dare tutto", "Motivated"),
     ("tranquillo e rilassato, corsa zen", "Calm"), ("sereno e in pace, senza stress", "Calm"),
+
+    # test set ampliato (frasi tenute fuori, distinte dal training) -> stime piu' affidabili
+    ("oggi corsa senza infamia e senza lode", "Neutral"),
+    ("nessuna carica particolare, tutto liscio", "Neutral"),
+    ("mi sento nella norma, corro e via", "Neutral"),
+    ("una giornata come tante, nulla di speciale", "Neutral"),
+    ("stato d'animo standard, tranquillo", "Neutral"),
+    ("testa vuota, un allenamento come un altro", "Neutral"),
+
+    ("oggi solo concentrazione sul gesto", "Focused"),
+    ("sono dentro la corsa, nient'altro esiste", "Focused"),
+    ("attento a ogni respiro, testa limpida", "Focused"),
+    ("resto sul pezzo dall'inizio alla fine", "Focused"),
+    ("mente affilata, occhio al cronometro", "Focused"),
+    ("niente mi distrae, solo la strada", "Focused"),
+
+    ("che sprint di energia stamattina", "Energetic"),
+    ("mi sento una centrale elettrica", "Energetic"),
+    ("ho benzina da vendere oggi", "Energetic"),
+    ("vibro di energia, non sto fermo", "Energetic"),
+    ("pieno di scatto e voglia di partire", "Energetic"),
+    ("una scarica di forza in tutto il corpo", "Energetic"),
+
+    ("oggi voglio spaccare i miei tempi", "Motivated"),
+    ("niente scuse, me lo vado a prendere", "Motivated"),
+    ("ho fame di migliorare, do tutto", "Motivated"),
+    ("sudo oggi per essere più forte domani", "Motivated"),
+    ("oggi mi supero, punto e basta", "Motivated"),
+    ("testa dura, arrivo fino in fondo", "Motivated"),
+
+    ("oggi corro solo per rilassare la mente", "Calm"),
+    ("tutto calmo, nessuna fretta", "Calm"),
+    ("respiro lento e pensieri leggeri", "Calm"),
+    ("una corsa morbida per ritrovare la pace", "Calm"),
+    ("sereno, mi lascio andare al ritmo", "Calm"),
+    ("niente stress, solo io e il fiato", "Calm"),
 ]
 
 
