@@ -134,7 +134,11 @@ def parse_numbers(text: str) -> dict:
     elif (m := _PACE.search(text)):
         pace = int(m.group(1)) + int(m.group(2)) / 60
         #velocità=pace/60
-        n["speed_kmh"] = round(60 / pace, 1) if pace else None      
+        n["speed_kmh"] = round(60 / pace, 1) if pace else None
+    #  Constraint Gate SHACL: una velocità fisiologicamente assurda (es. 300 km/h) viene
+    #  scartata qui, alla fonte, invece di propagarsi nel resto della pipeline
+    if n.get("speed_kmh") is not None and not validate_speed(n["speed_kmh"]):
+        del n["speed_kmh"]
     if (m := _DIST.search(text)):
         n["distance_km"] = float(m.group(1).replace(",", "."))
     if (m := _DUR.search(text)):
@@ -164,13 +168,9 @@ def route(text: str) -> dict:
     #estrae mood tramite SetFit
     mood = predict_mood(text)
 
-    #estrae (speed_kmh, distance_km, duration_min)
+    #estrae (speed_kmh, distance_km, duration_min); parse_numbers valida gia' la velocita'
+    #contro il Constraint Gate SHACL, quindi qui speed_kmh e' gia' fisiologicamente sensata
     numbers = parse_numbers(text)
-
-    #viene validata la velocità tramite l'ontologia
-    if numbers.get("speed_kmh") is not None:
-        if not validate_speed(numbers["speed_kmh"]):
-            numbers.pop("speed_kmh")
 
     #se esiste speed_kmh si ricava i BPM target
     target_bpm = bpm_from_speed(numbers["speed_kmh"]) if numbers.get("speed_kmh") else None
