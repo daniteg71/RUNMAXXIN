@@ -17,9 +17,12 @@ Usage:  python tester.py            # interactive; --seed N to reproduce a run
 from __future__ import annotations
 
 import argparse
+import csv
 import random
 import time
+import zlib
 from collections import Counter
+from pathlib import Path
 from statistics import mean
 
 from rich.columns import Columns
@@ -97,26 +100,28 @@ def session_length_sec(numbers: dict, avg_spd: float, rng) -> tuple[int, str]:
     return mins * 60, f"random {mins} min"
 
 
-def generate_session(fn, resting, maxhr, total_sec, speed_scale, rng) -> list[dict]:
-    """Genera i dati sensore per canzone: la FORMA dall'archetipo `fn`, il LIVELLO di velocità
-    da `speed_scale` (dalla velocità dichiarata nel prompt, o 1.0), + rumore stocastico. La durata
-    di ogni canzone è variabile (2.5-4 min: le canzoni vere non durano tutte uguale). Sforzo/HRR/
-    trend li calcola il file base physiological_state.py."""
-    states, prev_bpm, t = [], None, 0.0
-    while t < total_sec and len(states) < 60:
-        seg = rng.uniform(150, 240)                          # durata canzone 2.5-4 min
-        center = min(t + seg / 2, float(total_sec))
-        bpm, speed, _phase = fn(int(center), total_sec)
-        bpm = max(60.0, bpm + rng.gauss(0, 2.0))
-        speed = max(1.0, speed * speed_scale + rng.gauss(0, 0.35))   # forma x livello dichiarato
-        hrr = compute_hrr(bpm, resting, maxhr)
-        slope = 0.0 if prev_bpm is None else (bpm - prev_bpm) / seg
-        prev_bpm = bpm
-        states.append({"t_min": t / 60.0, "mean_hrr": hrr,
-                       "effort_state": classify_effort(hrr), "trend_state": classify_trend(slope),
-                       "mean_speed_kmh": speed})
-        t += seg
-    return states
+DURATIONS_CSV = "data/song_durations.csv"
+
+
+def load_or_make_durations(songs: str = "songs.csv", out: str = DURATIONS_CSV) -> dict:
+    """song_id -> durata (secondi). songs.csv non ha la durata; qui ne assegno una stabile e
+    "casuale" (2:30-4:00) per canzone e la salvo in un CSV a parte, così ogni canzone dura la sua
+    e la durata è un dato leggibile — senza toccare il catalogo base da 17 MB. Deterministico
+    (crc32 del song_id): stessa canzone -> stessa durata sempre."""
+    p = Path(out)
+    if p.exists():
+        with open(p, newline="", encoding="utf-8") as f:
+            return {r["song_id"]: int(r["duration_sec"]) for r in csv.DictReader(f)}
+    dur = {}
+    with open(songs, newline="", encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            dur[r["song_id"]] = 150 + zlib.crc32(r["song_id"].encode()) % 91   # 150-240 s
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["song_id", "duration_sec"])
+        w.writerows(dur.items())
+    return dur
 
 
 _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
@@ -124,7 +129,7 @@ _REGIME_STYLE = {"recovery": "bold red", "warmup": "yellow",
 
 
 def render(prompt, intent, nlp_real, sid, scale, t_min, hrr_hist, spd_hist,
-           state, target, song):
+           state, target, song, seg):
     itxt = Text.assemble(
         ("▶ ", "bold"), (prompt, "italic white"),
         (f"    → goal={intent['goal']} mood={intent['mood']}", "white"),
@@ -154,7 +159,8 @@ def render(prompt, intent, nlp_real, sid, scale, t_min, hrr_hist, spd_hist,
     now = Table.grid(padding=(0, 1))
     now.add_row(Text(str(song["title"]) + "  —  " + str(song["artist"]), style="bold white"))
     now.add_row(Text.assemble((f"{song['genre']}", "cyan"), ("  ·  ", "dim"),
-                              (f"{song['bpm']} bpm", "white")))
+                              (f"{song['bpm']} bpm", "white"), ("  ·  ", "dim"),
+                              (f"{int(seg) // 60}:{int(seg) % 60:02d}", "white")))
     now.add_row(Text(f"▶ {song.get('spotify_url', '')}", style="dim green"))
     playing = Panel(now, title="♪ NOW PLAYING", border_style="bright_magenta")
 
@@ -175,11 +181,12 @@ def print_summary(sid, scale, prompt, intent, playlist, hrr_hist, spd_hist):
     console.print(Panel(stats, title="WORKOUT SUMMARY", border_style="green"))
 
     pl = Table(title="PLAYLIST — every song chosen", expand=True, border_style="bright_magenta")
-    for c in ("#", "time", "title", "artist", "genre", "bpm", "regime"):
+    for c in ("#", "time", "title", "artist", "genre", "bpm", "len", "regime"):
         pl.add_column(c)
     for i, p in enumerate(playlist, 1):
-        pl.add_row(str(i), f"{p['t']:.0f}m", str(p["title"])[:26], str(p["artist"])[:18],
-                   p["genre"], f"{p['bpm']:.0f}", p["regime"])
+        seg = int(p.get("dur", 180))
+        pl.add_row(str(i), f"{p['t']:.0f}m", str(p["title"])[:24], str(p["artist"])[:16],
+                   p["genre"], f"{p['bpm']:.0f}", f"{seg // 60}:{seg % 60:02d}", p["regime"])
     console.print(pl)
 
 
@@ -207,28 +214,39 @@ def main() -> None:
     speed_scale = (declared / base_avg) if declared else 1.0      # il passo dichiarato fissa il LIVELLO
     eff_avg = declared if declared else base_avg
     total_sec, scale = session_length_sec(intent["numbers"], eff_avg, rng)
-    states = generate_session(fn, resting, maxhr, total_sec, speed_scale, rng)
 
     effort_by_song = load_effort_by_song()
     variants = load_song_variants()
-    console.print(f"\n[dim]{sid} · {scale} · {len(states)} songs · ▶ play…[/dim]")
-    played, last_bpm, hrr_hist, spd_hist, playlist = [], None, [], [], []
+    durations = load_or_make_durations()
+    console.print(f"\n[dim]{sid} · {scale} · ~{total_sec // 60} min · ▶ play…[/dim]")
+    played, last_bpm, prev_bpm, hrr_hist, spd_hist, playlist = [], None, None, [], [], []
+    t, last_seg = 0.0, 180.0
     with Live(console=console, refresh_per_second=8, screen=False) as live:
-        for state in states:
-            hrr_hist.append(state["mean_hrr"])
-            spd_hist.append(state["mean_speed_kmh"])
+        while t < total_sec and len(playlist) < 60:
+            abpm, aspeed, _phase = fn(int(min(t, float(total_sec))), total_sec)   # forma archetipo a t
+            bpm = max(60.0, abpm + rng.gauss(0, 2.0))
+            speed = max(1.0, aspeed * speed_scale + rng.gauss(0, 0.35))           # forma x livello dichiarato
+            hrr = compute_hrr(bpm, resting, maxhr)
+            slope = 0.0 if prev_bpm is None else (bpm - prev_bpm) / last_seg
+            state = {"t_min": t / 60.0, "mean_hrr": hrr, "effort_state": classify_effort(hrr),
+                     "trend_state": classify_trend(slope), "mean_speed_kmh": speed}
+            prev_bpm = bpm
+            hrr_hist.append(hrr); spd_hist.append(speed)
             target = decide(intent, state, last_bpm, elapsed_min=state["t_min"])
             top = recommender.recommend(target, top_k=TOP_K * 8, exclude_song_ids=played)
             song, _explored, _rows = pick_song(rng, target, top, effort_by_song)
             played.extend(variants.get((song["title"], song["artist"]), [str(song["song_id"])]))
             last_bpm = float(song["bpm"])
+            seg = durations.get(str(song["song_id"]), 180)                       # la canzone dura la SUA
             playlist.append({"t": state["t_min"], "title": song["title"], "artist": song["artist"],
-                             "genre": song["genre"], "bpm": float(song["bpm"]),
+                             "genre": song["genre"], "bpm": float(song["bpm"]), "dur": seg,
                              "regime": "recovery" if target.recovery else target.regime,
                              "effort": state["effort_state"]})
             live.update(render(prompt, intent, nlp_real, sid, scale, state["t_min"], hrr_hist,
-                               spd_hist, state, target, song))
+                               spd_hist, state, target, song, seg))
             time.sleep(a.seconds_per_song)
+            t += seg
+            last_seg = seg
 
     console.print("\n[bold green]Workout finished.[/bold green]\n")
     if playlist:

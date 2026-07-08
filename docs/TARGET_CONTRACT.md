@@ -4,10 +4,16 @@ Per chi costruisce il **recommendation system**. Il controller (`controller.py`)
 `decide(intent, analysis=None, last_bpm=None, elapsed_min=None) -> Target`. Tu ricevi il
 `Target`, calcoli una distanza dai vettori-canzone e assegni probabilità con un softmax.
 
-> **Stato: implementato.** `recommender.py` consuma esattamente questo contratto
-> (`recommender.recommend(target, top_k, exclude_song_ids)` → Top-K con `probability`).
-> Usa `bpm, energy, valence, weights, bpm_tolerance, genres, tau`. Non usa `effort_band`
-> (lo sforzo è già incorporato nel vettore via `bpm`/`energy`).
+> **Stato: implementato.** `recommender.py` consuma `bpm, energy, valence, weights,
+> bpm_tolerance, genres, tau` e restituisce le Top-K con `probability`. **Non** usa
+> `effort_band` internamente — lo sforzo NON è del tutto incorporato nel vettore
+> `[bpm,energy,valence]`: misurato su un campione ampio, il Top-1 del recommender viola
+> l'`effort_band` del target nel **16.7% dei casi (20/120)**. Per questo `effort_band` viene
+> consumato **a valle**, da `session.pick_song` (vedi README, "Gate a valle sul Top-K"), che
+> filtra le Top-K del recommender per compatibilità di sforzo prima di scegliere. Inoltre il
+> recommender calcola il softmax ma poi **ordina e prende il primo** (deterministico: `tau`
+> non cambia la scelta) — anche questo viene corretto a valle campionando fra le candidate
+> compatibili pesando per `probability`.
 
 ## 1. Cosa ti esce: `Target`
 
@@ -43,11 +49,13 @@ d(song) =  w_bpm     · |bpm_s − t.bpm| / t.bpm_tolerance      # BPM normalizz
          + w_energy  · |energy_s − t.energy|
          + w_valence · |valence_s − t.valence|
          (+ penalità se t.genres ≠ [] e song.genre ∉ t.genres)
-         (+ opz. scarta se song.matches_effort ∩ t.effort_band = ∅)
 
 P(song) = softmax( − d(song) / t.tau )      # τ alto = varia, τ basso = preciso
 scegli la prossima canzone ∝ P(song), escludendo le già suonate
 ```
+`effort_band` **non** entra in questa formula: non è un compito del recommender, è del **gate a
+valle** (§1 sopra) — che riceve le Top-K già ordinate da questa formula e sceglie fra quelle
+compatibili con `effort_band`, campionando invece di prendere sempre la prima (vedi README).
 - Il **`bpm_tolerance`** è il normalizzatore del BPM: stretto (5) penalizza forte gli scarti
   (regime quantitativo, "resta preciso"); largo (10) è più permissivo (qualitativo, "varia").
 - Opzionale ma consigliato: **correzione d'ottava** sul BPM — `min` su ½×,1×,2× di `bpm_s`
@@ -62,7 +70,10 @@ scegli la prossima canzone ∝ P(song), escludendo le già suonate
  "effort_band":["HighEffort","VeryHighEffort"],"recovery":false,"regime":"quantitative"}
 ```
 
-**QUALITATIVO** — nessun numero: raggio largo, **generi del mood**, τ più alto (varia).
+**QUALITATIVO** — nessun numero: raggio largo, **generi del mood**, τ più alto (varia). Il
+`bpm` **insegue la velocità/cadenza reale misurata** (entrainment continuo, `live_entrainment_bpm`)
+quando c'è un segnale sensori; l'esempio sotto è il caso **senza** segnale (cold start), che
+ripiega sul centro-banda del tipo — con i sensori attivi il valore cambia ad ogni finestra.
 ```json
 {"bpm":175.0,"energy":0.9,"valence":0.75,"weights":{"bpm":0.85,"energy":0.09,"valence":0.06},
  "bpm_tolerance":10.0,"genres":["black-metal","breakbeat","edm","techno","hardstyle","happy", "..."],
@@ -70,18 +81,21 @@ scegli la prossima canzone ∝ P(song), escludendo le già suonate
  "recovery":false,"regime":"qualitative"}
 ```
 
-**WARMUP** — primi ~5 min: stesso schema, ma `bpm`/`energy` più bassi (rampa). Trattalo come un target normale.
+**WARMUP** — primi ~5 min: stesso schema, ma `bpm`/`energy` più bassi (rampa). `effort_band` è
+**rilassata** (Low/TargetEffort, non quella nominale del goal): la musica è ancora calma, quindi
+il gate a valle deve poter trovare canzoni compatibili anche in questa fase.
 ```json
 {"bpm":139.6,"energy":0.48,"valence":0.75,"weights":{"bpm":0.8,"energy":0.15,"valence":0.05},
  "bpm_tolerance":5.0,"genres":[],"tau":0.2,"mood":"Energetic","goal":"IntenseRun",
- "effort_band":["HighEffort","VeryHighEffort"],"recovery":false,"regime":"warmup"}
+ "effort_band":["LowEffort","TargetEffort"],"recovery":false,"regime":"warmup"}
 ```
 
-**RECOVERY** — safety (cuore alto): `recovery=true`, BPM/energy/valence bassi, `effort_band=(LowEffort,)`.
+**RECOVERY** — safety (cuore alto): `recovery=true`, BPM/energy/valence bassi, `effort_band`
+rilassata (Low/TargetEffort, stesso motivo del warmup).
 ```json
 {"bpm":120.0,"energy":0.3,"valence":0.25,"weights":{"bpm":0.8,"energy":0.15,"valence":0.05},
  "bpm_tolerance":5.0,"genres":[],"tau":0.2,"mood":"Energetic","goal":"IntenseRun",
- "effort_band":["LowEffort"],"recovery":true,"regime":"recovery"}
+ "effort_band":["LowEffort","TargetEffort"],"recovery":true,"regime":"recovery"}
 ```
 
 **FUSIONE** (es. EasyRun ma sforzo alto → calma): il vettore è già "abbassato", `weights` dal tipo.
@@ -94,6 +108,8 @@ scegli la prossima canzone ∝ P(song), escludendo le già suonate
 
 ## 5. In una frase
 Ti arriva **sempre** lo stesso oggetto `Target`; le "varianti" cambiano solo i **valori** di
-`bpm/energy/valence`, `bpm_tolerance`, `genres`, `tau`, `effort_band`. La tua funzione è una sola:
-distanza pesata su `as_vector()` (BPM normalizzato da `bpm_tolerance`) + filtro `genres`/`effort_band`
-→ `softmax(−d/tau)` → prossima canzone.
+`bpm/energy/valence`, `bpm_tolerance`, `genres`, `tau`, `effort_band`. Il lavoro è diviso in due:
+il **recommender** fa distanza pesata su `as_vector()` (BPM normalizzato da `bpm_tolerance`) +
+filtro `genres` → `softmax(−d/tau)` → Top-K ordinate; il **gate a valle** (`session.pick_song`,
+non il recommender) filtra quelle Top-K con `effort_band` e **campiona** (non prende sempre la
+prima) fra le compatibili.
