@@ -120,14 +120,31 @@ variabilità di ritmo tipica del lavoro a intervalli. ⚙️ design, resta calco
 Il recommender (§ sotto) ottimizza la distanza vettoriale `[bpm,energy,valence]` ma **ignora**
 la compatibilità di sforzo (`matches_effort` della canzone vs `effort_band` del target): misurato
 su un campione ampio di combinazioni goal×mood×sforzo×regime, il Top-1 viola l'`effort_band` nel
-**16.7% dei casi (20/120)**. `session.pick_valid_song` scorre le **Top-K** del recommender e
-sceglie, via query SPARQL (`is_effort_compatible`, stesso meccanismo di C3), la prima canzone
-compatibile; se nessuna lo è, logga la violazione e tiene il Top-1.
+**16.7% dei casi (20/120)**. `session.pick_song` filtra le **Top-K** del recommender con
+`is_effort_compatible` (query SPARQL, stesso meccanismo di C3), tenendo solo le compatibili
+(se nessuna lo è, ripiega su tutte le Top-K e logga la violazione).
 - Pattern **Generator→Validator**: il modello statistico (recommender) **sovra-genera** candidati,
   un layer simbolico separato **decide VALID/INVALID** — il recommender non cambia, resta
   distanza+softmax puro.
 - Non è una scelta stilistica: la soglia di correzione (16.7%) è misurata prima di implementare
   il gate, non assunta.
+
+### C7. Campionamento reale sul Top-K filtrato (`session.pick_song`)
+Il recommender calcola `probability` con un softmax (τ) ma poi **ordina e prende il primo**
+elemento — è quindi deterministico: target simili producono **sempre le stesse canzoni**
+(misurato: sessioni diverse con target vicini restituivano playlist identiche). `pick_song`
+completa il softmax **campionando** (non scegliendo sempre il massimo) fra le candidate
+compatibili filtrate da C6, pesando per `probability` — è l'algoritmo di Boltzmann che τ
+presuppone (Sutton & Barto), applicato dove il recommender lo calcola ma non lo usa. Il
+campionamento è seminato per sessione (`zlib.crc32` del prompt/id sessione): riproducibile
+entro la stessa sessione, diverso tra sessioni diverse.
+
+Prima del campionamento, `pick_song` **deduplica** le Top-K per (titolo, artista):
+`songs.csv` contiene la stessa traccia con `song_id` diversi (fino a ~45 copie per alcuni
+brani) — senza deduplica, l'esclusione per `song_id` da sola lascia rientrare "la stessa"
+canzone sotto un id diverso. Quando una canzone è scelta, tutte le sue varianti vengono
+escluse dai turni successivi (`load_song_variants`), non solo quel `song_id`.
+⚙️ soglia di campionamento (`SAMPLE_POOL`, quante candidate vicine considerare) = design.
 
 ## Stadio 3 — Recommender (`recommender.py`)
 Riceve il `Target`, calcola la **distanza euclidea pesata** target↔canzone e assegna una
@@ -143,6 +160,10 @@ P(s) = softmax(−d(s)/τ) = exp(−d(s)/τ) / Σ_j exp(−d(j)/τ)
   sforzo sul Top-K è verificata a valle dall'effort gate (C6), non dal recommender stesso.
 - ✅ **Sutton & Barto** — softmax/Boltzmann per exploration/exploitation (τ alto esplora, τ→0 sfrutta).
 - ⚙️ distanza euclidea pesata e normalizzazione del BPM via tolleranza = scelte di design → ablation.
+- ⚠️ **Limite misurato**: il modulo calcola `P(s)` ma poi **ordina e prende il massimo** — a
+  parità di target restituisce sempre la stessa canzone; τ non influisce sulla scelta finale, solo
+  sul valore di `probability` riportato. L'exploration/exploitation reale (il campionamento da
+  `P(s)`) è implementata a valle, in `session.pick_song` (C7).
 
 ---
 
